@@ -5,12 +5,15 @@ Openrobot Terminal entry point.
 import sys
 import os
 import ctypes
+import logging
 from pathlib import Path
 
 from dotenv import load_dotenv
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtGui import QIcon
 from PyQt6.QtCore import Qt
+
+log = logging.getLogger(__name__)
 
 
 def resource_path(relative_path: str) -> str:
@@ -25,11 +28,30 @@ def main():
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
             "openrobot.motor.analyzer.1")
 
-    # Load .env from project root
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    load_dotenv(env_path)
+    # Load .env — exe: next to exe file, dev: project root
+    if getattr(sys, 'frozen', False):
+        env_path = Path(sys.executable).parent / ".env"
+    else:
+        env_path = Path(__file__).resolve().parent.parent / ".env"
+
+    _env_missing_path = None
+    if env_path.exists():
+        load_dotenv(env_path, override=True)
+        log.info(".env loaded from %s", env_path)
+    else:
+        log.warning(".env not found at %s", env_path)
+        _env_missing_path = str(env_path)
 
     app = QApplication(sys.argv)
+
+    # Warn user if .env was not found (AI features won't work)
+    if _env_missing_path:
+        QMessageBox.warning(
+            None, ".env not found",
+            f".env file not found. AI features disabled.\n\n"
+            f"Expected location:\n{_env_missing_path}\n\n"
+            f"Create a .env file with:\nOPENAI_API_KEY=sk-..."
+        )
 
     # Set icon — search multiple locations, prefer .png
     app_icon = QIcon()
