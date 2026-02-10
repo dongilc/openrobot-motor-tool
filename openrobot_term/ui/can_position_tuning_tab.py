@@ -21,12 +21,11 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 
-from ..protocol.serial_transport import SerialTransport
-from ..protocol.commands import build_get_mcconf, build_get_mcconf_default, McconfPid
+from ..protocol.commands import build_get_mcconf, build_get_mcconf_default, McconfPid, build_set_mcconf_with_pid
 from ..protocol.can_transport import PcanTransport
 from ..protocol.can_commands import (
     RmdCommand, RmdStatus, RmdPid, parse_pid,
-    build_read_pid, build_write_pid_to_ram, build_write_pid_to_rom,
+    build_read_pid, build_write_pid_to_rom,
     build_position_closed_loop_1, build_set_multiturn_position,
     build_speed_closed_loop,
     build_motor_off, build_motor_stop, build_read_motor_status_2,
@@ -43,11 +42,9 @@ class CanPositionTuningTab(QWidget):
     _llm_result_signal = pyqtSignal(object)
     _llm_error_signal = pyqtSignal(str)
 
-    def __init__(self, can_transport: PcanTransport,
-                 serial_transport: Optional[SerialTransport] = None):
+    def __init__(self, can_transport: PcanTransport):
         super().__init__()
         self._transport = can_transport
-        self._serial = serial_transport
         self._auto_tuner: Optional[CanAutoTuner] = None
         self._speed_auto_tuner: Optional[CanSpeedAutoTuner] = None
         self._original_mcconf: Optional[bytes] = None
@@ -73,7 +70,8 @@ class CanPositionTuningTab(QWidget):
         self._speed_torque_buf: list[float] = []
         self._speed_time_buf: list[float] = []
         self._speed_t0: Optional[float] = None
-        self._speed_target_erpm: int = 0
+        self._speed_target: int = 0
+        self._speed_mode: int = 1  # 0=DPS, 1=eRPM (default eRPM)
         self._speed_test_duration: float = 3.0
         self._speed_cmd_timer: Optional[QTimer] = None
         self._last_speed_metrics: Optional[MotorMetrics] = None
@@ -110,7 +108,8 @@ class CanPositionTuningTab(QWidget):
         ctrl_layout.addWidget(QLabel("Cmd:"))
         self.cmd_combo = QComboBox()
         self.cmd_combo.addItems([
-            "Position (0xA3)", "Multiturn+DPS (0xA4)", "Speed eRPM (0xA2)"
+            "Position (0xA3)", "Multiturn+DPS (0xA4)",
+            "Speed eRPM (0xA2)", "Speed DPS (0xA2)",
         ])
         self.cmd_combo.currentIndexChanged.connect(self._on_cmd_mode_changed)
         ctrl_layout.addWidget(self.cmd_combo)
@@ -153,10 +152,19 @@ class CanPositionTuningTab(QWidget):
         ctrl_layout.addWidget(self.speed_spin)
         self._speed_unit_label = QLabel("eRPM")
         ctrl_layout.addWidget(self._speed_unit_label)
+        self._pole_label = QLabel("Poles:")
+        ctrl_layout.addWidget(self._pole_label)
+        self.pole_spin = QSpinBox()
+        self.pole_spin.setRange(1, 50)
+        self.pole_spin.setValue(21)
+        self.pole_spin.setToolTip("Motor pole pairs (eRPM ↔ DPS conversion)")
+        ctrl_layout.addWidget(self.pole_spin)
         # Hide speed controls by default
         self._speed_label.hide()
         self.speed_spin.hide()
         self._speed_unit_label.hide()
+        self._pole_label.hide()
+        self.pole_spin.hide()
 
         ctrl_layout.addWidget(QLabel("Duration:"))
         self.duration_spin = QDoubleSpinBox()
@@ -294,18 +302,21 @@ class CanPositionTuningTab(QWidget):
         mid_panel.addWidget(metrics_group)
 
         # PID Tuning (compact grid: label | current | → | suggested)
-        self.pid_group_widget = QGroupBox("PID Tuning (CAN/RMD)")
+        self.pid_group_widget = QGroupBox("Position PID Tuning")
         pid_grid = QGridLayout(self.pid_group_widget)
         self.pid_kp = QDoubleSpinBox()
         self.pid_ki = QDoubleSpinBox()
         self.pid_kd = QDoubleSpinBox()
+        self.pid_kd_flt = QDoubleSpinBox()
         self.sug_kp = QLabel("--")
         self.sug_ki = QLabel("--")
         self.sug_kd = QLabel("--")
+        self.sug_kd_flt = QLabel("--")
         for i, (lbl_text, spin, sug) in enumerate([
             ("Kp:", self.pid_kp, self.sug_kp),
             ("Ki:", self.pid_ki, self.sug_ki),
             ("Kd:", self.pid_kd, self.sug_kd),
+            ("Kd Flt:", self.pid_kd_flt, self.sug_kd_flt),
         ]):
             spin.setDecimals(5)
             spin.setRange(0, 100)
@@ -321,10 +332,7 @@ class CanPositionTuningTab(QWidget):
         self.read_pid_btn = QPushButton("Read")
         self.read_pid_btn.clicked.connect(self._read_pid)
         pid_btn_row.addWidget(self.read_pid_btn)
-        self.write_ram_btn = QPushButton("Write RAM")
-        self.write_ram_btn.clicked.connect(self._write_pid_ram)
-        pid_btn_row.addWidget(self.write_ram_btn)
-        self.write_rom_btn = QPushButton("Write ROM")
+        self.write_rom_btn = QPushButton("Write MCCONF")
         self.write_rom_btn.setStyleSheet("background-color: #884400;")
         self.write_rom_btn.clicked.connect(self._write_pid_rom)
         pid_btn_row.addWidget(self.write_rom_btn)
@@ -332,7 +340,7 @@ class CanPositionTuningTab(QWidget):
         self.apply_btn.clicked.connect(self._apply_suggested)
         self.apply_btn.setEnabled(False)
         pid_btn_row.addWidget(self.apply_btn)
-        pid_grid.addLayout(pid_btn_row, 3, 0, 1, 4)
+        pid_grid.addLayout(pid_btn_row, 4, 0, 1, 4)
         mid_panel.addWidget(self.pid_group_widget)
 
         # Current Speed PID (read from serial MCCONF)
@@ -364,8 +372,13 @@ class CanPositionTuningTab(QWidget):
         self.read_default_btn = QPushButton("Read Default")
         self.read_default_btn.clicked.connect(self._read_mcconf_default)
         cur_btn_row.addWidget(self.read_default_btn)
+        self.write_speed_pid_btn = QPushButton("Write")
+        self.write_speed_pid_btn.setStyleSheet("background-color: #884400;")
+        self.write_speed_pid_btn.clicked.connect(self._write_speed_pid)
+        cur_btn_row.addWidget(self.write_speed_pid_btn)
         cur_grid.addLayout(cur_btn_row, 5, 0, 1, 2)
         mid_panel.addWidget(self.cur_pid_group)
+        self.cur_pid_group.hide()  # Hidden by default (Position mode)
         mid_panel.addStretch()
 
         # RIGHT PANEL — AI Analysis
@@ -440,7 +453,18 @@ class CanPositionTuningTab(QWidget):
 
     def _on_cmd_mode_changed(self, index: int):
         """Switch UI between position and speed modes."""
-        is_speed = (index == 2)
+        is_speed_erpm = (index == 2)
+        is_speed_dps = (index == 3)
+        is_speed = is_speed_erpm or is_speed_dps
+
+        # Save old speed mode before updating (for value conversion)
+        prev_speed_mode = self._speed_mode  # 0=DPS, 1=eRPM
+
+        # Track speed sub-mode
+        if is_speed_erpm:
+            self._speed_mode = 1
+        elif is_speed_dps:
+            self._speed_mode = 0
 
         # Position controls
         for w in [self.start_pos_spin, self.target_pos_spin, self.dps_spin,
@@ -448,18 +472,43 @@ class CanPositionTuningTab(QWidget):
             w.setVisible(not is_speed)
 
         # Speed controls
-        for w in [self.speed_spin, self._speed_label, self._speed_unit_label]:
+        for w in [self.speed_spin, self._speed_label, self._speed_unit_label,
+                  self._pole_label, self.pole_spin]:
             w.setVisible(is_speed)
+
+        # Speed spin label/range per sub-mode — convert current value
+        pp = self.pole_spin.value()
+        old_val = self.speed_spin.value()
+        if is_speed_dps:
+            self._speed_label.setText("DPS:")
+            self._speed_unit_label.setText("dps")
+            if prev_speed_mode == 1:  # was eRPM → convert to DPS
+                converted = int(round(old_val * 6.0 / pp))
+            else:
+                converted = old_val
+            self.speed_spin.setRange(-25000, 25000)
+            self.speed_spin.setValue(max(-25000, min(25000, converted)))
+        elif is_speed_erpm:
+            self._speed_label.setText("eRPM:")
+            self._speed_unit_label.setText("eRPM")
+            if prev_speed_mode == 0:  # was DPS → convert to eRPM
+                converted = int(round(old_val * pp / 6.0))
+            else:
+                converted = old_val
+            self.speed_spin.setRange(-100000, 100000)
+            self.speed_spin.setValue(max(-100000, min(100000, converted)))
 
         # Plot titles
         if is_speed:
             self.step_plot.setTitle("Speed Step Response")
             self.step_plot.setLabel('left', 'Speed', units='dps')
-            self.pid_group_widget.hide()
         else:
             self.step_plot.setTitle("Position Step Response")
             self.step_plot.setLabel('left', 'Position', units='deg')
-            self.pid_group_widget.show()
+
+        # PID panel visibility
+        self.pid_group_widget.setVisible(not is_speed)
+        self.cur_pid_group.setVisible(is_speed_erpm)
 
         # Update metrics labels
         self._update_metrics_labels(is_speed)
@@ -526,7 +575,7 @@ class CanPositionTuningTab(QWidget):
 
     def start_collection(self):
         """Start data collection — dispatches to position or speed mode."""
-        if self.cmd_combo.currentIndex() == 2:
+        if self.cmd_combo.currentIndex() in (2, 3):
             self._start_speed_collection()
             return
 
@@ -565,14 +614,16 @@ class CanPositionTuningTab(QWidget):
     # ── Speed eRPM Collection ──────────────────────────────────────
 
     def _start_speed_collection(self):
-        """Start speed eRPM step response collection."""
-        target_erpm = self.speed_spin.value()
+        """Start speed step response collection (eRPM or DPS)."""
+        target_val = self.speed_spin.value()
         duration = self.duration_spin.value()
+        mode_str = "DPS (mode=0)" if self._speed_mode == 0 else "eRPM (mode=1)"
+        unit_str = "dps" if self._speed_mode == 0 else "eRPM"
 
         reply = QMessageBox.warning(
             self, "Motor Warning",
-            f"Speed eRPM Test:\n\n"
-            f"  Target: {target_erpm} eRPM (0xA2 mode=1)\n"
+            f"Speed Test:\n\n"
+            f"  Target: {target_val} {unit_str} (0xA2 {mode_str})\n"
             f"  Duration: {duration:.1f}s\n\n"
             f"Motor will spin. Ensure it is safe!",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -589,7 +640,7 @@ class CanPositionTuningTab(QWidget):
         # DPS_CONTROL_DURATION position lock which fights against
         # the VESC built-in speed PID used by eRPM mode=1.
         self._transport.send_frame(build_motor_off())
-        self._speed_target_erpm = target_erpm
+        self._speed_target = target_val
         self._speed_test_duration = duration
         QTimer.singleShot(1000, self._begin_speed_test)
 
@@ -628,7 +679,7 @@ class CanPositionTuningTab(QWidget):
             self._fire_speed_step()
 
     def _fire_speed_step(self):
-        """Send eRPM speed command after baseline."""
+        """Send speed command (eRPM or DPS) after baseline."""
         self._poll_start = time.time()
 
         # Reset buffers after baseline (keep clean data from step start)
@@ -637,11 +688,11 @@ class CanPositionTuningTab(QWidget):
         self._speed_time_buf.clear()
         self._speed_t0 = None
 
-        # Send eRPM speed command (mode=1) and keep re-sending periodically.
-        # VESC eRPM mode uses mc_interface_set_pid_speed() which has a timeout —
+        # Send speed command and keep re-sending periodically.
+        # VESC speed mode uses mc_interface_set_pid_speed() which has a timeout —
         # the command must be refreshed or the motor stops.
         self._transport.send_frame(
-            build_speed_closed_loop(self._speed_target_erpm, mode=1)
+            build_speed_closed_loop(self._speed_target, mode=self._speed_mode)
         )
         self._speed_cmd_timer = QTimer(self)
         self._speed_cmd_timer.setInterval(50)  # 50 ms refresh
@@ -663,9 +714,9 @@ class CanPositionTuningTab(QWidget):
         )
 
     def _resend_speed_cmd(self):
-        """Periodically re-send eRPM speed command to prevent VESC timeout."""
+        """Periodically re-send speed command to prevent VESC timeout."""
         self._transport.send_frame(
-            build_speed_closed_loop(self._speed_target_erpm, mode=1)
+            build_speed_closed_loop(self._speed_target, mode=self._speed_mode)
         )
 
     def _update_speed_collect_progress(self):
@@ -724,7 +775,7 @@ class CanPositionTuningTab(QWidget):
         # Target in dps: convert eRPM to dps for analysis.
         # For analysis purposes we pass dps data directly as "rpm_data" —
         # the metrics (ripple%, settling time, overshoot) are unit-agnostic ratios.
-        target_dps = float(self._speed_target_erpm)  # placeholder: unit label shows dps
+        target_dps = float(self._speed_target)  # placeholder: unit label shows dps
         # Note: actual relationship is eRPM → dps depends on pole pairs.
         # We use the raw dps feedback and auto-detect the steady-state target.
         # Use last 20% average as effective target for more accurate analysis.
@@ -976,45 +1027,72 @@ class CanPositionTuningTab(QWidget):
     # ── PID Read/Write ──────────────────────────────────────────────
 
     def _read_pid(self):
-        self._transport.send_frame(build_read_pid())
-
-    def _write_pid_ram(self):
-        self._transport.send_frame(
-            build_write_pid_to_ram(self.pid_kp.value(), self.pid_ki.value(), self.pid_kd.value())
-        )
-        self.ai_text.append(
-            f"[PID] Written to RAM: Kp={self.pid_kp.value():.5f} "
-            f"Ki={self.pid_ki.value():.5f} Kd={self.pid_kd.value():.5f}"
-        )
+        if not self._transport.is_connected():
+            return
+        self._transport.send_vesc_to_target(build_get_mcconf())
+        self.ai_text.append("[MCCONF] Reading position PID...")
 
     def _write_pid_rom(self):
+        if not self._transport.is_connected():
+            QMessageBox.warning(self, "Not connected",
+                                "PCAN connection required to write MCCONF.")
+            return
+        if self._original_mcconf is None:
+            QMessageBox.warning(
+                self, "No MCCONF",
+                "Read MCCONF first (use 'Read Gains') before writing."
+            )
+            return
+        kp = self.pid_kp.value()
+        ki = self.pid_ki.value()
+        kd = self.pid_kd.value()
+        kd_flt = self.pid_kd_flt.value()
         reply = QMessageBox.warning(
-            self, "Write to ROM",
-            "Write PID to ROM (permanent)?\n\nThis will persist after power cycle.",
+            self, "Write Position PID",
+            f"Write Position PID to VESC MCCONF?\n\n"
+            f"Kp={kp:.5f}  Ki={ki:.5f}\nKd={kd:.5f}  Kd Flt={kd_flt:.5f}",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self._transport.send_frame(
-                build_write_pid_to_rom(self.pid_kp.value(), self.pid_ki.value(), self.pid_kd.value())
+            packet = build_set_mcconf_with_pid(
+                self._original_mcconf,
+                kp, ki, kd, kd_flt,
+                position_mode=True,
             )
+            self._transport.send_vesc_to_target(packet)
             self.ai_text.append(
-                f"[PID] Written to ROM: Kp={self.pid_kp.value():.5f} "
-                f"Ki={self.pid_ki.value():.5f} Kd={self.pid_kd.value():.5f}"
+                f"[Pos PID] Written MCCONF: Kp={kp:.5f} Ki={ki:.5f} "
+                f"Kd={kd:.5f} Kd_flt={kd_flt:.5f}"
             )
 
     def _apply_suggested(self):
-        """Apply suggested PID to motor via Write RAM."""
+        """Apply suggested PID to motor via MCCONF."""
         if self._suggested_pid is None:
+            return
+        if self._original_mcconf is None:
+            QMessageBox.warning(
+                self, "No MCCONF",
+                "Read MCCONF first (use 'Read Gains') before applying."
+            )
             return
         kp = self._suggested_pid.kp
         ki = self._suggested_pid.ki
         kd = self._suggested_pid.kd
-        self._transport.send_frame(build_write_pid_to_ram(kp, ki, kd))
+        kd_flt = self.pid_kd_flt.value()
+        packet = build_set_mcconf_with_pid(
+            self._original_mcconf,
+            kp, ki, kd, kd_flt,
+            position_mode=True,
+        )
+        self._transport.send_vesc_to_target(packet)
         self.pid_kp.setValue(kp)
         self.pid_ki.setValue(ki)
         self.pid_kd.setValue(kd)
-        self.ai_text.append(f"[PID] Applied to RAM: Kp={kp:.5f} Ki={ki:.5f} Kd={kd:.5f}")
+        self.ai_text.append(
+            f"[Pos PID] Applied MCCONF: Kp={kp:.5f} Ki={ki:.5f} "
+            f"Kd={kd:.5f} Kd_flt={kd_flt:.5f}"
+        )
 
         # Add to history
         score = self._last_metrics.quality_score if self._last_metrics else None
@@ -1025,7 +1103,7 @@ class CanPositionTuningTab(QWidget):
     # ── Auto-Tune ───────────────────────────────────────────────────
 
     def start_auto_tune(self):
-        is_speed = self.cmd_combo.currentIndex() == 2
+        is_speed = self.cmd_combo.currentIndex() in (2, 3)
 
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key or api_key == "your-api-key-here":
@@ -1033,12 +1111,12 @@ class CanPositionTuningTab(QWidget):
             return
 
         if is_speed:
-            # Speed eRPM auto-tune requires serial for MCCONF PID writes
-            if not self._serial or not self._serial.is_connected():
+            # Speed eRPM auto-tune requires VESC connection for MCCONF PID writes
+            if not self._transport.is_connected():
                 QMessageBox.warning(
                     self, "Not Connected",
-                    "Serial connection required for speed auto-tune.\n"
-                    "Speed PID is written via COMM_SET_MCCONF."
+                    "PCAN connection required for speed auto-tune.\n"
+                    "Speed PID is written via COMM_SET_MCCONF over CAN."
                 )
                 return
             if self._original_mcconf is None:
@@ -1048,12 +1126,14 @@ class CanPositionTuningTab(QWidget):
                     "Original MCCONF data is needed to write PID changes."
                 )
                 return
-            target_erpm = self.speed_spin.value()
+            target_val = self.speed_spin.value()
+            mode_str = "DPS (mode=0)" if self._speed_mode == 0 else "eRPM (mode=1)"
+            unit_str = "dps" if self._speed_mode == 0 else "eRPM"
             if not self._motor_confirmed:
                 reply = QMessageBox.warning(
                     self, "Auto-Tune Confirmation",
-                    f"Speed eRPM Auto-Tune:\n\n"
-                    f"  Target: {target_erpm} eRPM (0xA2 mode=1)\n"
+                    f"Speed Auto-Tune:\n\n"
+                    f"  Target: {target_val} {unit_str} (0xA2 {mode_str})\n"
                     f"  Iterations: 5\n"
                     f"  Duration: {self.duration_spin.value():.1f}s per iteration\n\n"
                     f"Motor will spin repeatedly.\n"
@@ -1157,7 +1237,6 @@ class CanPositionTuningTab(QWidget):
 
         self._speed_auto_tuner = CanSpeedAutoTuner(
             can_transport=self._transport,
-            serial_transport=self._serial,
             advisor=advisor,
             target_erpm=self.speed_spin.value(),
             initial_pid=initial_pid,
@@ -1304,8 +1383,8 @@ class CanPositionTuningTab(QWidget):
         self._motor_confirmed = False
 
         # Re-read MCCONF to update UI with final PID values
-        if self._serial and self._serial.is_connected():
-            self._serial.send_packet(build_get_mcconf())
+        if self._transport.is_connected():
+            self._transport.send_vesc_to_target(build_get_mcconf())
 
     # ── LLM Analysis ────────────────────────────────────────────────
 
@@ -1320,7 +1399,7 @@ class CanPositionTuningTab(QWidget):
         self.ai_btn.setEnabled(False)
         model_name = self.model_combo.currentText()
         lang = "Korean" if self.lang_combo.currentText() == "\ud55c\uad6d\uc5b4" else "English"
-        is_speed = self.cmd_combo.currentIndex() == 2
+        is_speed = self.cmd_combo.currentIndex() in (2, 3)
 
         if is_speed:
             # Speed mode: use parent LLMAdvisor (speed PID)
@@ -1330,9 +1409,11 @@ class CanPositionTuningTab(QWidget):
                 kd=self.cur_kd.value(), kd_filter=self.cur_kd_flt.value(),
                 ramp_erpms_s=self.cur_ramp.value(),
             )
+            mode_str = "DPS (mode=0)" if self._speed_mode == 0 else "eRPM (mode=1)"
+            unit_str = "dps" if self._speed_mode == 0 else "eRPM"
             context = (
-                f"Control: CAN eRPM Speed (0xA2 mode=1)\n"
-                f"Target: {self._speed_target_erpm} eRPM\n"
+                f"Control: CAN Speed (0xA2 {mode_str})\n"
+                f"Target: {self._speed_target} {unit_str}\n"
                 f"VESC Speed PID is configured via VESC-Tool serial, "
                 f"not adjustable via CAN RMD. Provide analysis and tuning suggestions."
             )
@@ -1379,7 +1460,7 @@ class CanPositionTuningTab(QWidget):
             text += "=== RAW RESPONSE ===\n" + result.raw_response + "\n"
         self.ai_text.setPlainText(text)
 
-        is_speed = self.cmd_combo.currentIndex() == 2
+        is_speed = self.cmd_combo.currentIndex() in (2, 3)
         if result.suggested_pid and not is_speed:
             self._suggested_pid = result.suggested_pid
             self.sug_kp.setText(f"{result.suggested_pid.kp:.5f}")
@@ -1458,37 +1539,82 @@ class CanPositionTuningTab(QWidget):
     # ── Current PID (serial MCCONF) ─────────────────────────────────
 
     def _read_mcconf_gains(self):
-        """Read current PID gains from VESC via serial COMM_GET_MCCONF."""
-        if not self._serial or not self._serial.is_connected():
+        """Read current PID gains from VESC via CAN EID COMM_GET_MCCONF."""
+        if not self._transport.is_connected():
             QMessageBox.warning(self, "Not connected",
-                                "Serial connection required to read MCCONF.")
+                                "PCAN connection required to read MCCONF.")
             return
-        self._serial.send_packet(build_get_mcconf())
+        self._transport.send_vesc_to_target(build_get_mcconf())
         self.ai_text.append("[MCCONF] Reading current gains...")
 
-    def _read_mcconf_default(self):
-        """Read default PID gains from VESC via serial COMM_GET_MCCONF_DEFAULT."""
-        if not self._serial or not self._serial.is_connected():
+    def _write_speed_pid(self):
+        """Write current speed PID values to VESC via COMM_SET_MCCONF over CAN."""
+        if not self._transport.is_connected():
             QMessageBox.warning(self, "Not connected",
-                                "Serial connection required to read MCCONF.")
+                                "PCAN connection required to write MCCONF.")
             return
-        self._serial.send_packet(build_get_mcconf_default())
+        if self._original_mcconf is None:
+            QMessageBox.warning(
+                self, "No MCCONF",
+                "Read MCCONF first (use 'Read Gains') before writing."
+            )
+            return
+        kp = self.cur_kp.value()
+        ki = self.cur_ki.value()
+        kd = self.cur_kd.value()
+        kd_flt = self.cur_kd_flt.value()
+        ramp = self.cur_ramp.value()
+        packet = build_set_mcconf_with_pid(
+            self._original_mcconf,
+            kp, ki, kd, kd_flt,
+            position_mode=False,
+            ramp_erpms_s=ramp,
+        )
+        self._transport.send_vesc_to_target(packet)
+        self.ai_text.append(
+            f"[Speed PID] Written: Kp={kp:.6f} Ki={ki:.6f} "
+            f"Kd={kd:.6f} Kd_flt={kd_flt:.6f} Ramp={ramp:.0f}"
+        )
+
+    def _read_mcconf_default(self):
+        """Read default PID gains from VESC via CAN EID COMM_GET_MCCONF_DEFAULT."""
+        if not self._transport.is_connected():
+            QMessageBox.warning(self, "Not connected",
+                                "PCAN connection required to read MCCONF.")
+            return
+        self._transport.send_vesc_to_target(build_get_mcconf_default())
         self.ai_text.append("[MCCONF] Reading default gains...")
 
-    def on_mcconf_received(self, pid: McconfPid, raw_data: bytes = None):
+    def on_mcconf_received(self, pid: McconfPid, raw_data: bytes = None,
+                           is_default: bool = False):
         """Handle MCCONF PID data dispatched from MainWindow."""
-        if raw_data:
+        if raw_data and not is_default:
             self._original_mcconf = raw_data
+        # Speed PID section
         self.cur_kp.setValue(pid.s_pid_kp)
         self.cur_ki.setValue(pid.s_pid_ki)
         self.cur_kd.setValue(pid.s_pid_kd)
         self.cur_kd_flt.setValue(pid.s_pid_kd_filter)
         self.cur_ramp.setValue(pid.s_pid_ramp_erpms_s)
+        # Position PID Tuning section
+        self.pid_kp.setValue(pid.p_pid_kp)
+        self.pid_ki.setValue(pid.p_pid_ki)
+        self.pid_kd.setValue(pid.p_pid_kd)
+        self.pid_kd_flt.setValue(pid.p_pid_kd_filter)
+        tag = "DEFAULT" if is_default else "MCCONF"
         self.ai_text.append(
-            f"[MCCONF] Speed PID: Kp={pid.s_pid_kp:.6f} Ki={pid.s_pid_ki:.6f} "
+            f"[{tag}] Speed PID: Kp={pid.s_pid_kp:.6f} Ki={pid.s_pid_ki:.6f} "
             f"Kd={pid.s_pid_kd:.6f} Kd_flt={pid.s_pid_kd_filter:.6f} "
             f"Ramp={pid.s_pid_ramp_erpms_s:.0f}"
         )
+        self.ai_text.append(
+            f"[{tag}] Pos PID: Kp={pid.p_pid_kp:.6f} Ki={pid.p_pid_ki:.6f} "
+            f"Kd={pid.p_pid_kd:.6f} Kd_flt={pid.p_pid_kd_filter:.6f}"
+        )
+
+    def set_pole_pairs(self, value: int):
+        """Set pole pairs from external source (e.g. mcconf foc_encoder_ratio)."""
+        self.pole_spin.setValue(value)
 
     def _update_fft_plot(self, freqs, mags, dominant_freq: float):
         """Update FFT plot with frequency data and dominant frequency marker."""

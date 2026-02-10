@@ -16,7 +16,7 @@ from PyQt6.QtCore import pyqtSignal, Qt, QTimer
 import numpy as np
 import pyqtgraph as pg
 
-from ..protocol.serial_transport import SerialTransport
+from ..protocol.can_transport import PcanTransport
 from ..protocol.commands import VescValues, CommPacketId
 from ..workers.data_poller import DataPoller
 
@@ -69,7 +69,7 @@ class _GrowBuffer:
 class RealtimeTab(QWidget):
     values_received = pyqtSignal(object)
 
-    def __init__(self, transport: SerialTransport):
+    def __init__(self, transport: PcanTransport):
         super().__init__()
         self._transport = transport
         self._poller = None
@@ -127,7 +127,7 @@ class RealtimeTab(QWidget):
 
         ctrl.addWidget(QLabel("Rate:"))
         self.rate_combo = QComboBox()
-        for r in ["10 Hz", "20 Hz", "50 Hz", "100 Hz", "200 Hz"]:
+        for r in ["10 Hz", "20 Hz", "50 Hz"]:
             self.rate_combo.addItem(r)
         self.rate_combo.setCurrentText("50 Hz")
         self.rate_combo.currentTextChanged.connect(self._on_rate_changed)

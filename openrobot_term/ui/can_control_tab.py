@@ -1,7 +1,10 @@
 """
-CAN Control panel — RMD motor control (torque/speed/position/multiturn).
-Designed for right-side dock (narrow vertical layout with scroll).
-Mirrors MotorControlTab pattern.
+Motor Control panel — unified RMD CAN + VESC EID control.
+
+RMD modes: torque (0xA1), speed (0xA2), position (0xA3), multiturn (0xA4)
+VESC modes: duty, current, speed (eRPM), position (deg)
+
+One active at a time; Start locks selection, Motor OFF/STOP releases all.
 """
 
 from PyQt6.QtWidgets import (
@@ -21,6 +24,14 @@ from ..protocol.can_commands import (
     build_position_closed_loop_1, build_set_multiturn_position,
     build_motor_off, build_motor_stop, build_motor_start,
 )
+from ..protocol.commands import (
+    VescValues, build_set_duty, build_set_current,
+    build_set_rpm, build_set_pos, build_get_values,
+)
+
+# VESC EID modes cap at 50 Hz (CAN EID bandwidth limit)
+_VESC_MAX_RATE_HZ = 50
+
 
 class CanControlTab(QWidget):
     torque_cmd_sent = pyqtSignal(float)  # emitted on each torque command send
@@ -37,6 +48,7 @@ class CanControlTab(QWidget):
         self._lpf_out = 0.0
         self._lpf_thread = None
         self._lpf_running = False
+        self._discovered_ids: list[int] = []
 
         self._build_ui()
         self._update_alpha_display()
@@ -103,7 +115,22 @@ class CanControlTab(QWidget):
 
         lpf_row.addStretch()
 
-        # ── Motor OFF / STOP / START ──
+        # ── STOP button (all modes) ──
+        stop_row = QHBoxLayout()
+        layout.addLayout(stop_row)
+
+        self.stop_all_btn = QPushButton("STOP ALL")
+        self.stop_all_btn.setMinimumHeight(34)
+        self.stop_all_btn.setStyleSheet(
+            "QPushButton { background-color: #cc3333; color: white; "
+            "font-weight: bold; font-size: 13px; padding: 4px 20px; }"
+            "QPushButton:pressed { background-color: #881111; border: 2px solid #ff4444; }"
+            "QPushButton:hover { background-color: #dd4444; }"
+        )
+        self.stop_all_btn.clicked.connect(self._stop_all)
+        stop_row.addWidget(self.stop_all_btn)
+
+        # ── Motor OFF / STOP / START (RMD) ──
         motor_row = QHBoxLayout()
         layout.addLayout(motor_row)
 
@@ -134,6 +161,150 @@ class CanControlTab(QWidget):
         )
         start_motor_btn.clicked.connect(lambda: self._motor_cmd(build_motor_start()))
         motor_row.addWidget(start_motor_btn)
+
+        # ══════════════════════════════════════════════════
+        # ── VESC EID Control Section ──
+        # ══════════════════════════════════════════════════
+
+        vesc_header = QLabel("─── VESC EID Control ───")
+        vesc_header.setStyleSheet("font-weight: bold; color: #ffaa44; padding: 4px 0;")
+        vesc_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(vesc_header)
+
+        # ── VESC Duty ──
+        vd_group = QGroupBox("Duty")
+        vdl = QVBoxLayout(vd_group)
+        vdl.setSpacing(4)
+        vdr1 = QHBoxLayout()
+        self.vesc_duty_spin = QDoubleSpinBox()
+        self.vesc_duty_spin.setRange(-1.0, 1.0)
+        self.vesc_duty_spin.setSingleStep(0.01)
+        self.vesc_duty_spin.setDecimals(3)
+        self.vesc_duty_spin.setMinimumHeight(32)
+        self.vesc_duty_spin.setStyleSheet("font-size: 15px; font-weight: bold;")
+        vdr1.addWidget(self.vesc_duty_spin, stretch=1)
+        vdr1.addWidget(QLabel("(-1~1)"))
+        vdl.addLayout(vdr1)
+        self.vesc_duty_slider = QSlider(Qt.Orientation.Horizontal)
+        self.vesc_duty_slider.setRange(-1000, 1000)
+        self.vesc_duty_slider.valueChanged.connect(lambda v: self.vesc_duty_spin.setValue(v / 1000.0))
+        self.vesc_duty_spin.valueChanged.connect(lambda v: self.vesc_duty_slider.setValue(int(v * 1000)))
+        vdl.addWidget(self.vesc_duty_slider)
+        self.vesc_duty_spin.valueChanged.connect(self._on_vesc_duty_value_changed)
+        self.vesc_duty_start_btn = QPushButton("Start Duty")
+        self.vesc_duty_start_btn.setMinimumHeight(30)
+        self.vesc_duty_start_btn.setStyleSheet(
+            "QPushButton { background-color: #886622; color: white; "
+            "font-weight: bold; padding: 4px 12px; }"
+            "QPushButton:disabled { background-color: #555; color: #999; }"
+        )
+        self.vesc_duty_start_btn.clicked.connect(lambda: self._start("vesc_duty"))
+        vdl.addWidget(self.vesc_duty_start_btn)
+        layout.addWidget(vd_group)
+
+        # ── VESC Current ──
+        vc_group = QGroupBox("Current")
+        vcl = QVBoxLayout(vc_group)
+        vcl.setSpacing(4)
+        vcr1 = QHBoxLayout()
+        self.vesc_current_spin = QDoubleSpinBox()
+        self.vesc_current_spin.setRange(-100.0, 100.0)
+        self.vesc_current_spin.setSingleStep(0.1)
+        self.vesc_current_spin.setDecimals(2)
+        self.vesc_current_spin.setMinimumHeight(32)
+        self.vesc_current_spin.setStyleSheet("font-size: 15px; font-weight: bold;")
+        vcr1.addWidget(self.vesc_current_spin, stretch=1)
+        vcr1.addWidget(QLabel("A"))
+        vcl.addLayout(vcr1)
+        self.vesc_current_slider = QSlider(Qt.Orientation.Horizontal)
+        self.vesc_current_slider.setRange(-1000, 1000)  # ±10A slider range
+        self.vesc_current_slider.valueChanged.connect(lambda v: self.vesc_current_spin.setValue(v / 100.0))
+        self.vesc_current_spin.valueChanged.connect(
+            lambda v: self.vesc_current_slider.setValue(int(max(-10.0, min(10.0, v)) * 100))
+        )
+        vcl.addWidget(self.vesc_current_slider)
+        self.vesc_current_spin.valueChanged.connect(self._on_vesc_current_value_changed)
+        self.vesc_current_start_btn = QPushButton("Start Current")
+        self.vesc_current_start_btn.setMinimumHeight(30)
+        self.vesc_current_start_btn.setStyleSheet(
+            "QPushButton { background-color: #886622; color: white; "
+            "font-weight: bold; padding: 4px 12px; }"
+            "QPushButton:disabled { background-color: #555; color: #999; }"
+        )
+        self.vesc_current_start_btn.clicked.connect(lambda: self._start("vesc_current"))
+        vcl.addWidget(self.vesc_current_start_btn)
+        layout.addWidget(vc_group)
+
+        # ── VESC Speed ──
+        vs_group = QGroupBox("Speed (eRPM)")
+        vsl = QVBoxLayout(vs_group)
+        vsl.setSpacing(4)
+        vsr1 = QHBoxLayout()
+        self.vesc_speed_spin = QDoubleSpinBox()
+        self.vesc_speed_spin.setRange(-100000, 100000)
+        self.vesc_speed_spin.setSingleStep(100)
+        self.vesc_speed_spin.setDecimals(0)
+        self.vesc_speed_spin.setMinimumHeight(32)
+        self.vesc_speed_spin.setStyleSheet("font-size: 15px; font-weight: bold;")
+        vsr1.addWidget(self.vesc_speed_spin, stretch=1)
+        vsr1.addWidget(QLabel("eRPM"))
+        vsl.addLayout(vsr1)
+        self.vesc_speed_slider = QSlider(Qt.Orientation.Horizontal)
+        self.vesc_speed_slider.setRange(-50000, 50000)
+        self.vesc_speed_slider.valueChanged.connect(lambda v: self.vesc_speed_spin.setValue(float(v)))
+        self.vesc_speed_spin.valueChanged.connect(lambda v: self.vesc_speed_slider.setValue(int(max(-50000, min(50000, v)))))
+        vsl.addWidget(self.vesc_speed_slider)
+        self.vesc_speed_spin.valueChanged.connect(self._on_vesc_speed_value_changed)
+        self.vesc_speed_start_btn = QPushButton("Start Speed")
+        self.vesc_speed_start_btn.setMinimumHeight(30)
+        self.vesc_speed_start_btn.setStyleSheet(
+            "QPushButton { background-color: #886622; color: white; "
+            "font-weight: bold; padding: 4px 12px; }"
+            "QPushButton:disabled { background-color: #555; color: #999; }"
+        )
+        self.vesc_speed_start_btn.clicked.connect(lambda: self._start("vesc_speed"))
+        vsl.addWidget(self.vesc_speed_start_btn)
+        layout.addWidget(vs_group)
+
+        # ── VESC Position ──
+        vp_group = QGroupBox("Position (deg)")
+        vpl = QVBoxLayout(vp_group)
+        vpl.setSpacing(4)
+        vpr1 = QHBoxLayout()
+        self.vesc_pos_spin = QDoubleSpinBox()
+        self.vesc_pos_spin.setRange(0.0, 360.0)
+        self.vesc_pos_spin.setSingleStep(1.0)
+        self.vesc_pos_spin.setDecimals(2)
+        self.vesc_pos_spin.setMinimumHeight(32)
+        self.vesc_pos_spin.setStyleSheet("font-size: 15px; font-weight: bold;")
+        vpr1.addWidget(self.vesc_pos_spin, stretch=1)
+        vpr1.addWidget(QLabel("deg"))
+        vpl.addLayout(vpr1)
+        self.vesc_pos_slider = QSlider(Qt.Orientation.Horizontal)
+        self.vesc_pos_slider.setRange(0, 36000)
+        self.vesc_pos_slider.valueChanged.connect(lambda v: self.vesc_pos_spin.setValue(v / 100.0))
+        self.vesc_pos_spin.valueChanged.connect(lambda v: self.vesc_pos_slider.setValue(int(v * 100)))
+        vpl.addWidget(self.vesc_pos_slider)
+        self.vesc_pos_spin.valueChanged.connect(self._on_vesc_pos_value_changed)
+        self.vesc_pos_start_btn = QPushButton("Start Position")
+        self.vesc_pos_start_btn.setMinimumHeight(30)
+        self.vesc_pos_start_btn.setStyleSheet(
+            "QPushButton { background-color: #886622; color: white; "
+            "font-weight: bold; padding: 4px 12px; }"
+            "QPushButton:disabled { background-color: #555; color: #999; }"
+        )
+        self.vesc_pos_start_btn.clicked.connect(lambda: self._start("vesc_position"))
+        vpl.addWidget(self.vesc_pos_start_btn)
+        layout.addWidget(vp_group)
+
+        # ══════════════════════════════════════════════════
+        # ── RMD CAN Control Section ──
+        # ══════════════════════════════════════════════════
+
+        rmd_header = QLabel("─── RMD CAN Control ───")
+        rmd_header.setStyleSheet("font-weight: bold; color: #88aaff; padding: 4px 0;")
+        rmd_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(rmd_header)
 
         # ── Torque Control ──
         torque_group = QGroupBox("Torque (0xA1)")
@@ -299,31 +470,73 @@ class CanControlTab(QWidget):
         ml.addWidget(self.mt_start_btn)
         layout.addWidget(mt_group)
 
+        # ══════════════════════════════════════════════════
         # ── Live Feedback ──
-        fb_group = QGroupBox("Live Feedback")
-        fb_layout = QGridLayout(fb_group)
-        fb_layout.setSpacing(2)
+        # ══════════════════════════════════════════════════
+
+        # RMD feedback
+        rmd_fb_group = QGroupBox("RMD Feedback")
+        rmd_fb_layout = QGridLayout(rmd_fb_group)
+        rmd_fb_layout.setSpacing(2)
 
         self.fb_labels = {}
-        items = [
+        rmd_items = [
             ("Temp:", "temp"), ("Torque:", "torque"),
             ("Speed:", "speed"), ("Pos:", "position"),
         ]
-        for i, (label, key) in enumerate(items):
+        for i, (label, key) in enumerate(rmd_items):
             row, col = i // 2, (i % 2) * 2
             lb = QLabel(label)
             lb.setStyleSheet("font-size: 11px; font-weight: bold;")
-            fb_layout.addWidget(lb, row, col)
+            rmd_fb_layout.addWidget(lb, row, col)
             val = QLabel("--")
             val.setStyleSheet("font-family: monospace; font-size: 11px;")
-            fb_layout.addWidget(val, row, col + 1)
+            rmd_fb_layout.addWidget(val, row, col + 1)
             self.fb_labels[key] = val
 
-        layout.addWidget(fb_group)
+        layout.addWidget(rmd_fb_group)
+
+        # VESC feedback
+        vesc_fb_group = QGroupBox("VESC Feedback")
+        vesc_fb_layout = QGridLayout(vesc_fb_group)
+        vesc_fb_layout.setSpacing(2)
+
+        self.vesc_fb_labels = {}
+        vesc_items = [
+            ("Duty:", "duty"), ("I_motor:", "i_motor"),
+            ("I_input:", "i_input"), ("RPM:", "rpm"),
+            ("Position:", "position"), ("V_in:", "v_in"),
+            ("Power:", "power"), ("T_mos:", "temp_mos"),
+            ("T_mot:", "temp_mot"), ("Fault:", "fault"),
+        ]
+        for i, (label, key) in enumerate(vesc_items):
+            row, col = i // 2, (i % 2) * 2
+            lb = QLabel(label)
+            lb.setStyleSheet("font-size: 11px; font-weight: bold;")
+            vesc_fb_layout.addWidget(lb, row, col)
+            val = QLabel("--")
+            val.setStyleSheet("font-family: monospace; font-size: 11px;")
+            vesc_fb_layout.addWidget(val, row, col + 1)
+            self.vesc_fb_labels[key] = val
+
+        layout.addWidget(vesc_fb_group)
 
         layout.addStretch()
 
-    # ── Speed mode helpers ──
+        # Collect all start buttons for enable/disable management
+        self._all_start_btns = [
+            self.torque_start_btn, self.speed_start_btn,
+            self.pos_start_btn, self.mt_start_btn,
+            self.vesc_duty_start_btn, self.vesc_current_start_btn,
+            self.vesc_speed_start_btn, self.vesc_pos_start_btn,
+        ]
+
+    # ── Helpers ──
+
+    def _is_vesc_mode(self, mode: str = None) -> bool:
+        """Check if a mode uses VESC EID protocol."""
+        m = mode or self._active_mode
+        return m is not None and m.startswith("vesc_")
 
     def _get_speed_mode(self) -> int:
         """Return 0 for DPS, 1 for eRPM."""
@@ -345,10 +558,15 @@ class CanControlTab(QWidget):
             self.speed_unit_label.setText("dps")
         self.speed_spin.setValue(0)
 
-    # ── Helpers ──
-
     def _get_rate_hz(self) -> int:
         return int(self.rate_combo.currentText().replace(" Hz", ""))
+
+    def _get_effective_rate_hz(self) -> int:
+        """Get rate clamped by VESC max for VESC modes."""
+        rate = self._get_rate_hz()
+        if self._is_vesc_mode():
+            return min(rate, _VESC_MAX_RATE_HZ)
+        return rate
 
     def _get_target(self) -> float:
         """Return the current target value for the active mode."""
@@ -360,6 +578,14 @@ class CanControlTab(QWidget):
             return self.pos_spin.value()
         elif self._active_mode == "multiturn":
             return self.mt_pos_spin.value()
+        elif self._active_mode == "vesc_duty":
+            return self.vesc_duty_spin.value()
+        elif self._active_mode == "vesc_current":
+            return self.vesc_current_spin.value()
+        elif self._active_mode == "vesc_speed":
+            return self.vesc_speed_spin.value()
+        elif self._active_mode == "vesc_position":
+            return self.vesc_pos_spin.value()
         return 0.0
 
     def _is_periodic(self) -> bool:
@@ -379,10 +605,8 @@ class CanControlTab(QWidget):
         self._active_mode = mode
 
         # Disable all start buttons while active
-        self.torque_start_btn.setEnabled(False)
-        self.speed_start_btn.setEnabled(False)
-        self.pos_start_btn.setEnabled(False)
-        self.mt_start_btn.setEnabled(False)
+        for btn in self._all_start_btns:
+            btn.setEnabled(False)
         self.rate_combo.setEnabled(False)
 
         # Start appropriate sender and send initial value
@@ -394,24 +618,44 @@ class CanControlTab(QWidget):
         self._send_timer.stop()
         self._stop_lpf_thread()
         self._active_mode = None
-        self.torque_start_btn.setEnabled(True)
-        self.speed_start_btn.setEnabled(True)
-        self.pos_start_btn.setEnabled(True)
-        self.mt_start_btn.setEnabled(True)
+        for btn in self._all_start_btns:
+            btn.setEnabled(True)
         self.rate_combo.setEnabled(True)
+
+    def update_discovered_ids(self, ids: list[int]):
+        """Store discovered CAN motor IDs for broadcast stop."""
+        self._discovered_ids = list(ids)
+
+    def _stop_all(self):
+        """STOP ALL: stop loop + send RMD off to all IDs + VESC current=0."""
+        self._stop_loop()
+        self.torque_cmd_sent.emit(0.0)
+        self.pos_cmd_sent.emit(float('nan'))
+        if self._transport.is_connected():
+            self._transport.stop_periodic()
+            ids = self._discovered_ids if self._discovered_ids else range(1, 9)
+            for mid in ids:
+                self._transport.send_frame_to(mid, build_motor_off())
+            self._transport.send_vesc_to_target(build_set_current(0.0))
 
     def _motor_cmd(self, data: bytes):
         """Send a motor OFF/STOP/START command, stopping any active control loop first."""
         self._stop_loop()
         self.torque_cmd_sent.emit(0.0)
         self.pos_cmd_sent.emit(float('nan'))
+        # Send RMD command
         self._send_once(data)
+        # Also stop VESC side for safety
+        if self._transport.is_connected():
+            self._transport.send_vesc_to_target(build_set_current(0.0))
 
     def _send_current_value(self):
         """Send the current target value once for the active mode."""
         if not self._transport.is_connected():
             return
         mode = self._active_mode
+
+        # RMD modes
         if mode == "torque":
             val = self.torque_spin.value()
             self._transport.send_frame(build_torque_closed_loop(val))
@@ -429,6 +673,24 @@ class CanControlTab(QWidget):
                 build_set_multiturn_position(self.mt_dps_spin.value(), val)
             )
             self.pos_cmd_sent.emit(val)
+
+        # VESC EID modes
+        elif mode == "vesc_duty":
+            val = self.vesc_duty_spin.value()
+            self._transport.send_vesc_to_target(build_set_duty(val))
+        elif mode == "vesc_current":
+            val = self.vesc_current_spin.value()
+            self._transport.send_vesc_to_target(build_set_current(val))
+        elif mode == "vesc_speed":
+            val = self.vesc_speed_spin.value()
+            self._transport.send_vesc_to_target(build_set_rpm(int(val)))
+        elif mode == "vesc_position":
+            val = self.vesc_pos_spin.value()
+            self._transport.send_vesc_to_target(build_set_pos(val))
+
+        # VESC modes also poll feedback
+        if self._is_vesc_mode(mode):
+            self._transport.send_vesc_to_target(build_get_values())
 
     # ── Send mode management (single source of truth) ──
 
@@ -448,7 +710,7 @@ class CanControlTab(QWidget):
             self._start_lpf_thread()
         elif self.periodic_chk.isChecked():
             # QTimer periodic
-            self._send_timer.start(int(1000 / self._get_rate_hz()))
+            self._send_timer.start(int(1000 / self._get_effective_rate_hz()))
         # else: single-shot via valueChanged handlers
 
     def _on_periodic_toggled(self, _checked: bool):
@@ -464,12 +726,12 @@ class CanControlTab(QWidget):
     def _compute_alpha(self) -> float:
         """Compute LPF alpha from cutoff frequency and send rate."""
         fc = self.lpf_cutoff_spin.value()
-        fs = self._get_rate_hz()
+        fs = self._get_effective_rate_hz()
         return 1.0 - math.exp(-2.0 * math.pi * fc / fs)
 
     def _update_alpha_display(self):
         alpha = self._compute_alpha()
-        self.lpf_alpha_label.setText(f"(α={alpha:.3f})")
+        self.lpf_alpha_label.setText(f"(\u03b1={alpha:.3f})")
 
     # ── LPF thread (precise timing for smooth commands) ──
 
@@ -494,10 +756,11 @@ class CanControlTab(QWidget):
         t_next = perf()
 
         while self._lpf_running and self._transport.is_connected():
-            interval = 1.0 / self._get_rate_hz()
+            interval = 1.0 / self._get_effective_rate_hz()
             alpha = self._compute_alpha()
             mode = self._active_mode
 
+            # RMD modes
             if mode == "torque":
                 target = self.torque_spin.value()
                 self._lpf_out += alpha * (target - self._lpf_out)
@@ -519,6 +782,28 @@ class CanControlTab(QWidget):
                     build_set_multiturn_position(self.mt_dps_spin.value(), self._lpf_out)
                 )
                 self.pos_cmd_sent.emit(self._lpf_out)
+
+            # VESC EID modes
+            elif mode == "vesc_duty":
+                target = self.vesc_duty_spin.value()
+                self._lpf_out += alpha * (target - self._lpf_out)
+                self._transport.send_vesc_to_target(build_set_duty(self._lpf_out))
+                self._transport.send_vesc_to_target(build_get_values())
+            elif mode == "vesc_current":
+                target = self.vesc_current_spin.value()
+                self._lpf_out += alpha * (target - self._lpf_out)
+                self._transport.send_vesc_to_target(build_set_current(self._lpf_out))
+                self._transport.send_vesc_to_target(build_get_values())
+            elif mode == "vesc_speed":
+                target = self.vesc_speed_spin.value()
+                self._lpf_out += alpha * (target - self._lpf_out)
+                self._transport.send_vesc_to_target(build_set_rpm(int(self._lpf_out)))
+                self._transport.send_vesc_to_target(build_get_values())
+            elif mode == "vesc_position":
+                target = self.vesc_pos_spin.value()
+                self._lpf_out += alpha * (target - self._lpf_out)
+                self._transport.send_vesc_to_target(build_set_pos(self._lpf_out))
+                self._transport.send_vesc_to_target(build_get_values())
             else:
                 break
 
@@ -532,7 +817,7 @@ class CanControlTab(QWidget):
                 if remaining > 0.002:
                     sleep(remaining - 0.002)
                 while perf() < t_next and self._lpf_running:
-                    sleep(0.0002)  # 200µs yield — prevents CPU 100%
+                    sleep(0.0002)  # 200us yield — prevents CPU 100%
 
     # ── Timer-based periodic send (non-LPF) ──
 
@@ -569,6 +854,22 @@ class CanControlTab(QWidget):
             )
             self.pos_cmd_sent.emit(val)
 
+    def _on_vesc_duty_value_changed(self):
+        if self._active_mode == "vesc_duty" and not self._is_periodic():
+            self._transport.send_vesc_to_target(build_set_duty(self.vesc_duty_spin.value()))
+
+    def _on_vesc_current_value_changed(self):
+        if self._active_mode == "vesc_current" and not self._is_periodic():
+            self._transport.send_vesc_to_target(build_set_current(self.vesc_current_spin.value()))
+
+    def _on_vesc_speed_value_changed(self):
+        if self._active_mode == "vesc_speed" and not self._is_periodic():
+            self._transport.send_vesc_to_target(build_set_rpm(int(self.vesc_speed_spin.value())))
+
+    def _on_vesc_pos_value_changed(self):
+        if self._active_mode == "vesc_position" and not self._is_periodic():
+            self._transport.send_vesc_to_target(build_set_pos(self.vesc_pos_spin.value()))
+
     def _send_once(self, data: bytes):
         if not self._transport.is_connected():
             QMessageBox.warning(self, "Not connected", "Open PCAN connection first.")
@@ -578,10 +879,31 @@ class CanControlTab(QWidget):
     # ── Live Feedback ──
 
     def _on_status_received(self, status):
+        """RMD status feedback (0x9C or 0xA1-A4 responses)."""
         self.fb_labels["temp"].setText(f"{status.motor_temp:.0f} C")
         self.fb_labels["torque"].setText(f"{status.torque_curr:.3f} A")
         self.fb_labels["speed"].setText(f"{status.speed_dps} dps")
         self.fb_labels["position"].setText(f"{status.enc_pos:.2f} deg")
+
+    def on_values(self, v: VescValues):
+        """VESC feedback from COMM_GET_VALUES (called by main_window dispatcher)."""
+        self.vesc_fb_labels["duty"].setText(f"{v.duty_now:.3f}")
+        self.vesc_fb_labels["i_motor"].setText(f"{v.avg_motor_current:.2f} A")
+        self.vesc_fb_labels["i_input"].setText(f"{v.avg_input_current:.2f} A")
+        self.vesc_fb_labels["rpm"].setText(f"{v.rpm:.0f}")
+        self.vesc_fb_labels["position"].setText(f"{v.pid_pos:.2f} deg")
+        self.vesc_fb_labels["v_in"].setText(f"{v.v_in:.1f} V")
+        self.vesc_fb_labels["power"].setText(f"{v.v_in * v.avg_input_current:.1f} W")
+        self.vesc_fb_labels["temp_mos"].setText(f"{v.temp_mosfet:.1f} C")
+        self.vesc_fb_labels["temp_mot"].setText(f"{v.temp_motor:.1f} C")
+        self.vesc_fb_labels["fault"].setText(f"{v.fault_code}")
+
+        if v.fault_code != 0:
+            self.vesc_fb_labels["fault"].setStyleSheet(
+                "font-family: monospace; font-size: 11px; color: red; font-weight: bold;"
+            )
+        else:
+            self.vesc_fb_labels["fault"].setStyleSheet("font-family: monospace; font-size: 11px;")
 
     def cleanup(self):
         self._stop_loop()

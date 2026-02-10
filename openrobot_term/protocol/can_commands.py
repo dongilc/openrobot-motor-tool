@@ -47,6 +47,17 @@ class RmdCommand(IntEnum):
     WRITE_MAX_CURRENT_TO_ROM = 0xB2
 
 
+# Fault broadcast marker (sent by firmware on fault, SID = 0x140 + motor_id)
+FAULT_BROADCAST = 0xBF
+
+
+def parse_fault_broadcast(data: list | bytes) -> tuple[int, str]:
+    """Parse fault broadcast frame. Returns (fault_code, fault_name)."""
+    fault_code = data[1] if len(data) > 1 else 0
+    fault_name = FAULT_CODE.get(fault_code, f'UNKNOWN_FAULT_{fault_code}')
+    return fault_code, fault_name
+
+
 # Commands that return motor status (temp/torque/speed/enc_pos)
 STATUS_RETURN_COMMANDS = frozenset({
     RmdCommand.TORQUE_CLOSED_LOOP,

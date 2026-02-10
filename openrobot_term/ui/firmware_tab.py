@@ -1,5 +1,5 @@
 """
-Firmware/Bootloader upload tab using standard VESC protocol.
+Firmware upload tab — CAN-only via PCAN-USB EID multi-frame protocol.
 """
 
 import threading
@@ -14,15 +14,15 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QTextCursor
 from PyQt6.QtCore import Qt
 
-from ..protocol.serial_transport import SerialTransport
-from ..workers.firmware_uploader import FirmwareUploader, UploadMode
+from ..protocol.can_transport import PcanTransport
+from ..workers.firmware_uploader import CanFirmwareUploader
 
 DEFAULT_FW_PATH = "build/ch.bin"
-DEFAULT_BL_PATH = "build/bootloader.bin"
+DEFAULT_BL_PATH = "Openrobot_Bootloader.bin"
 
 
 class FirmwareTab(QWidget):
-    def __init__(self, transport: SerialTransport):
+    def __init__(self, transport: PcanTransport):
         super().__init__()
         self._transport = transport
         self.uploader = None
@@ -35,18 +35,28 @@ class FirmwareTab(QWidget):
         mode_layout = QHBoxLayout(mode_group)
         layout.addWidget(mode_group)
 
-        mode_layout.addWidget(QLabel("Mode:"))
-        self.mode_combo = QComboBox()
-        self.mode_combo.addItem("Firmware", UploadMode.FIRMWARE)
-        self.mode_combo.addItem("Bootloader", UploadMode.BOOTLOADER)
-        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
-        mode_layout.addWidget(self.mode_combo)
+        # Upload type selection
+        mode_layout.addWidget(QLabel("Type:"))
+        self.upload_type_combo = QComboBox()
+        self.upload_type_combo.addItem("Firmware", "firmware")
+        self.upload_type_combo.addItem("Bootloader", "bootloader")
+        self.upload_type_combo.currentIndexChanged.connect(self._on_upload_type_changed)
+        mode_layout.addWidget(self.upload_type_combo)
+
+        mode_layout.addSpacing(20)
+
+        # CAN target ID
+        mode_layout.addWidget(QLabel("Target:"))
+        self.can_target_combo = QComboBox()
+        self.can_target_combo.addItem("Broadcast (ALL)", 255)
+        mode_layout.addWidget(self.can_target_combo)
+
         mode_layout.addStretch()
 
-        # Warning label
-        self.warning_label = QLabel()
+        self.warning_label = QLabel(
+            "<span style='color: green;'>CAN Firmware upload mode</span>"
+        )
         self.warning_label.setWordWrap(False)
-        self._update_warning_label()
         mode_layout.addWidget(self.warning_label)
 
         # File selection
@@ -60,7 +70,7 @@ class FirmwareTab(QWidget):
 
         row1.addWidget(QLabel("BIN File:"))
         self.bin_edit = QLineEdit(DEFAULT_FW_PATH)
-        self.bin_edit.setPlaceholderText("Select firmware or bootloader binary file...")
+        self.bin_edit.setPlaceholderText("Select firmware binary file...")
         row1.addWidget(self.bin_edit)
 
         self.browse_btn = QPushButton("Browse...")
@@ -124,41 +134,12 @@ class FirmwareTab(QWidget):
         layout.addWidget(info_frame)
 
         info_text = QLabel(
-            "<b>Firmware:</b> COMM_ERASE_NEW_APP(2) + COMM_WRITE_NEW_APP_DATA(3) + COMM_JUMP_TO_BOOTLOADER(1)<br>"
-            "<b>Bootloader:</b> COMM_ERASE_BOOTLOADER(73) + COMM_WRITE_NEW_APP_DATA(3)<br>"
-            "<b>Chunk size:</b> 384 bytes, <b>Erase timeout:</b> 20s, <b>Write timeout:</b> 3s<br>"
-            "<br>"
-            "<span style='color: red;'><b>Warning:</b> Bootloader upload is risky! "
-            "A failed bootloader upload may brick the device.</span>"
+            "<b>CAN Firmware Upload:</b> COMM_ERASE_NEW_APP(2) + COMM_WRITE_NEW_APP_DATA(3) + COMM_JUMP_TO_BOOTLOADER(1)<br>"
+            "<b>Transport:</b> PCAN-USB EID multi-frame (send_mode=2, fire-and-forget)<br>"
+            "<b>Chunk size:</b> 384 bytes, <b>Erase timeout:</b> 30s, <b>Chunk delay:</b> 50ms<br>"
         )
         info_text.setWordWrap(True)
         info_layout.addWidget(info_text)
-
-        # Listen for MCU abort in text
-        self._transport.text_received.connect(self._check_abort)
-
-    def _update_warning_label(self):
-        mode = self.mode_combo.currentData()
-        if mode == UploadMode.BOOTLOADER:
-            self.warning_label.setText(
-                "<span style='color: red; font-weight: bold;'>"
-                "BOOTLOADER MODE - Use with caution!</span>"
-            )
-        else:
-            self.warning_label.setText(
-                "<span style='color: green;'>Firmware upload mode</span>"
-            )
-
-    def _on_mode_changed(self, index):
-        self._update_warning_label()
-        mode = self.mode_combo.currentData()
-        if mode == UploadMode.BOOTLOADER:
-            if self.bin_edit.text() == DEFAULT_FW_PATH:
-                self.bin_edit.setText(DEFAULT_BL_PATH)
-        else:
-            if self.bin_edit.text() == DEFAULT_BL_PATH:
-                self.bin_edit.setText(DEFAULT_FW_PATH)
-        self._update_file_info()
 
     def _update_file_info(self):
         path = self.bin_edit.text().strip()
@@ -183,28 +164,33 @@ class FirmwareTab(QWidget):
             self.log_view.insertPlainText("\n")
         self.log_view.ensureCursorVisible()
 
-    def _check_abort(self, text: str):
-        if "[ABORT]" in text:
-            self.upload_error_flag = True
-            if self.uploader and self.uploader.isRunning():
-                self.uploader.notify_mcu_abort()
+    def _on_upload_type_changed(self, index):
+        is_bootloader = self.upload_type_combo.currentData() == "bootloader"
+        if is_bootloader:
+            self.warning_label.setText(
+                "<span style='color: orange;'>CAN Bootloader upload mode</span>")
+            self._set_default_bin_path(DEFAULT_BL_PATH)
+        else:
+            self.warning_label.setText(
+                "<span style='color: green;'>CAN Firmware upload mode</span>")
+            self._set_default_bin_path(DEFAULT_FW_PATH)
+
+    def _set_default_bin_path(self, relative_path: str):
+        """Set bin_edit to the default path relative to the tool's root directory."""
+        tool_dir = Path(__file__).resolve().parent.parent.parent
+        default = tool_dir / relative_path
+        self.bin_edit.setText(str(default))
 
     def on_browse(self):
-        mode = self.mode_combo.currentData()
-        if mode == UploadMode.BOOTLOADER:
-            title = "Select Bootloader BIN file"
-        else:
-            title = "Select Firmware BIN file"
-
         path, _ = QFileDialog.getOpenFileName(
-            self, title, "", "Binary (*.bin);;All (*.*)"
+            self, "Select Firmware BIN file", "", "Binary (*.bin);;All (*.*)"
         )
         if path:
             self.bin_edit.setText(path)
 
     def on_flash_upload(self):
         if not self._transport.is_connected():
-            QMessageBox.warning(self, "Not connected", "Connect to device first.")
+            QMessageBox.warning(self, "Not connected", "Open PCAN connection first.")
             return
 
         bin_path = self.bin_edit.text().strip()
@@ -215,49 +201,63 @@ class FirmwareTab(QWidget):
             QMessageBox.warning(self, "BIN not found", f"File not found:\n{bin_path}")
             return
 
-        mode = self.mode_combo.currentData()
-        mode_str = "bootloader" if mode == UploadMode.BOOTLOADER else "firmware"
+        is_bootloader = self.upload_type_combo.currentData() == "bootloader"
+        type_str = "bootloader" if is_bootloader else "firmware"
+        target_id = self.can_target_combo.currentData()
+        target_str = "ALL controllers (broadcast)" if target_id == 255 else f"controller ID {target_id}"
 
-        # Confirmation dialog (especially important for bootloader)
-        if mode == UploadMode.BOOTLOADER:
+        if is_bootloader:
             reply = QMessageBox.warning(
                 self,
                 "Bootloader Upload Warning",
-                "You are about to upload a BOOTLOADER.\n\n"
-                "This is a RISKY operation!\n"
-                "A failed bootloader upload may brick the device permanently.\n\n"
-                "Are you absolutely sure you want to continue?",
+                f"You are about to upload a BOOTLOADER to {target_str}.\n\n"
+                f"File: {Path(bin_path).name}\n\n"
+                "WARNING: A corrupted bootloader may brick the device!\n"
+                "Recovery requires SWD/JTAG programmer.\n\n"
+                "Are you absolutely sure?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
-            if reply != QMessageBox.StandardButton.Yes:
-                return
+        elif target_id == 255:
+            reply = QMessageBox.warning(
+                self,
+                "CAN Broadcast Upload Warning",
+                f"You are about to broadcast firmware to ALL controllers on the CAN bus.\n\n"
+                f"File: {Path(bin_path).name}\n\n"
+                "ALL controllers will be updated simultaneously.\n"
+                "Are you sure?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
         else:
             reply = QMessageBox.question(
                 self,
-                "Confirm Upload",
-                f"Upload firmware to device?\n\nFile: {Path(bin_path).name}",
+                "Confirm CAN Upload",
+                f"Upload {type_str} via CAN to {target_str}?\n\nFile: {Path(bin_path).name}",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes
             )
-            if reply != QMessageBox.StandardButton.Yes:
-                return
+        if reply != QMessageBox.StandardButton.Yes:
+            return
 
         # Clear log and reset
         self.log_view.clear()
         self.upload_error_flag = False
         self.progress_bar.setValue(0)
-        self.status_label.setText(f"Starting {mode_str} upload...")
 
-        self.log(f"[INFO] Starting {mode_str} upload...")
+        self.status_label.setText(f"Starting {type_str} upload (CAN)...")
+
+        self.log(f"[INFO] Starting {type_str} upload (CAN)...")
         self.log(f"[INFO] File: {bin_path}")
+        self.log(f"[INFO] Target: {target_str}")
 
         self.cancel_btn.setEnabled(True)
         self.flash_btn.setEnabled(False)
-        self.mode_combo.setEnabled(False)
 
-        # Create and start uploader
-        self.uploader = FirmwareUploader(self._transport, bin_path, mode)
+        # Create and start CAN uploader
+        self.uploader = CanFirmwareUploader(
+            self._transport, bin_path, target_id=target_id,
+            bootloader_mode=is_bootloader)
         self.uploader.log.connect(self.log)
         self.uploader.progress.connect(self._on_progress)
         self.uploader.finished_ok.connect(self._on_finished)
@@ -275,19 +275,36 @@ class FirmwareTab(QWidget):
             self.status_label.setText("Cancelling...")
 
     def _on_finished(self):
-        self.log("[INFO] Upload finished successfully!")
-        self.status_label.setText("Upload complete!")
+        is_bootloader = self.upload_type_combo.currentData() == "bootloader"
+        type_str = "Bootloader" if is_bootloader else "Firmware"
+
+        self.log(f"[INFO] {type_str} upload finished successfully!")
+        self.status_label.setText(f"{type_str} upload complete!")
         self.status_label.setStyleSheet("color: green;")
         self.cancel_btn.setEnabled(False)
         self.flash_btn.setEnabled(True)
-        self.mode_combo.setEnabled(True)
 
         QMessageBox.information(
             self,
             "Upload Complete",
-            "Firmware upload completed successfully.\n\n"
-            "The device may need to reboot to use the new firmware."
+            f"{type_str} upload completed successfully.\n\n"
+            "The device may need to reboot to apply the update."
         )
+
+    def update_can_targets(self, ids: list[int]):
+        """Update CAN target dropdown with discovered IDs from scan."""
+        current_data = self.can_target_combo.currentData()
+        self.can_target_combo.blockSignals(True)
+        self.can_target_combo.clear()
+        self.can_target_combo.addItem("Broadcast (ALL)", 255)
+        for mid in ids:
+            self.can_target_combo.addItem(f"ID {mid}", mid)
+        # Restore previous selection if still available
+        for i in range(self.can_target_combo.count()):
+            if self.can_target_combo.itemData(i) == current_data:
+                self.can_target_combo.setCurrentIndex(i)
+                break
+        self.can_target_combo.blockSignals(False)
 
     def _on_aborted(self, reason: str):
         self.log(reason)
@@ -295,4 +312,3 @@ class FirmwareTab(QWidget):
         self.status_label.setStyleSheet("color: red;")
         self.cancel_btn.setEnabled(False)
         self.flash_btn.setEnabled(True)
-        self.mode_combo.setEnabled(True)

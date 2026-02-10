@@ -14,12 +14,12 @@ from collections import deque
 import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal, QCoreApplication
 
-from ..protocol.serial_transport import SerialTransport
+from ..protocol.can_transport import PcanTransport
 from ..protocol.commands import (
     VescValues, build_get_values,
-    build_set_current, build_set_rpm,
     build_set_mcconf_with_foc_cc,
 )
+from ..protocol.can_commands import build_torque_closed_loop, build_speed_closed_loop, build_motor_off
 from .current_metrics import CurrentMetrics, analyze_current_step, analyze_current_steady_state
 from .llm_advisor import CurrentControlAdvisor, CurrentAnalysisResult, FOCCurrentGains
 
@@ -48,7 +48,7 @@ class CurrentAutoTuner(QThread):
 
     def __init__(
         self,
-        transport: SerialTransport,
+        transport: PcanTransport,
         advisor: CurrentControlAdvisor,
         target_current: float,
         initial_gains: FOCCurrentGains,
@@ -133,9 +133,9 @@ class CurrentAutoTuner(QThread):
             self._voltage_buf.clear()
             self._rpm_buf.clear()
 
-            # Start collecting and apply current step
+            # Start collecting and apply current step via RMD torque
             self._collecting = True
-            self._transport.send_packet(build_set_current(self._target_current))
+            self._transport.send_frame(build_torque_closed_loop(self._target_current))
 
             # Collect during step response
             interval = 1.0 / self._sample_rate
@@ -146,9 +146,9 @@ class CurrentAutoTuner(QThread):
                     self._stop_motor()
                     self.tuning_finished.emit("Cancelled")
                     return
-                # Keep sending current command (VESC timeout)
-                self._transport.send_packet(build_set_current(self._target_current))
-                self._transport.send_packet(build_get_values())
+                # Keep sending current command via RMD torque
+                self._transport.send_frame(build_torque_closed_loop(self._target_current))
+                self._transport.send_vesc_to_target(build_get_values())
                 progress = (time.time() - t0) / self._step_duration * 0.5  # 0-50%
                 self.data_collecting.emit(progress)
                 QCoreApplication.processEvents()
@@ -183,8 +183,8 @@ class CurrentAutoTuner(QThread):
             self._voltage_buf.clear()
             self._rpm_buf.clear()
 
-            # Start speed control to reach target RPM
-            self._transport.send_packet(build_set_rpm(int(self._target_rpm)))
+            # Start speed control to reach target RPM via RMD
+            self._transport.send_frame(build_speed_closed_loop(int(self._target_rpm), mode=1))
             self._sleep_with_events(2.0)  # Wait for motor to reach speed
 
             # Collect steady-state data
@@ -196,8 +196,8 @@ class CurrentAutoTuner(QThread):
                     self._stop_motor()
                     self.tuning_finished.emit("Cancelled")
                     return
-                self._transport.send_packet(build_set_rpm(int(self._target_rpm)))
-                self._transport.send_packet(build_get_values())
+                self._transport.send_frame(build_speed_closed_loop(int(self._target_rpm), mode=1))
+                self._transport.send_vesc_to_target(build_get_values())
                 progress = 0.5 + (time.time() - t0) / self._steady_duration * 0.5  # 50-100%
                 self.data_collecting.emit(progress)
                 QCoreApplication.processEvents()
@@ -370,7 +370,7 @@ class CurrentAutoTuner(QThread):
         """Apply FOC current gains to VESC."""
         self.status_update.emit(f"{label}: Applying Kp={gains.kp:.6f}, Ki={gains.ki:.3f}")
         packet = build_set_mcconf_with_foc_cc(self._original_mcconf, gains.kp, gains.ki)
-        self._transport.send_packet(packet)
+        self._transport.send_vesc_to_target(packet)
 
     def _run_verification(self) -> float:
         """Run verification test after rollback."""
@@ -385,15 +385,15 @@ class CurrentAutoTuner(QThread):
         self._voltage_buf.clear()
 
         self._collecting = True
-        self._transport.send_packet(build_set_current(self._target_current))
+        self._transport.send_frame(build_torque_closed_loop(self._target_current))
 
         interval = 1.0 / self._sample_rate
         t0 = time.time()
         while time.time() - t0 < self._step_duration:
             if not self._running:
                 break
-            self._transport.send_packet(build_set_current(self._target_current))
-            self._transport.send_packet(build_get_values())
+            self._transport.send_frame(build_torque_closed_loop(self._target_current))
+            self._transport.send_vesc_to_target(build_get_values())
             QCoreApplication.processEvents()
             QThread.msleep(int(interval * 1000))
 
@@ -415,5 +415,5 @@ class CurrentAutoTuner(QThread):
         return metrics.quality_score
 
     def _stop_motor(self):
-        """Stop motor."""
-        self._transport.send_packet(build_set_current(0.0))
+        """Stop motor via RMD motor off command."""
+        self._transport.send_frame(build_motor_off())

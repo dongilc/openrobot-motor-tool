@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer
 
-from ..protocol.serial_transport import SerialTransport
+from ..protocol.can_transport import PcanTransport
 from ..protocol.commands import (
     build_set_detect, decode_rotor_position,
     DISP_POS_MODE_NONE, DISP_POS_MODE_ENCODER,
@@ -72,7 +72,7 @@ class _GrowBuffer:
 
 
 class PositionTab(QWidget):
-    def __init__(self, transport: SerialTransport):
+    def __init__(self, transport: PcanTransport):
         super().__init__()
         self._transport = transport
         self._streaming = False
@@ -225,7 +225,7 @@ class PositionTab(QWidget):
             return
         idx = self.mode_combo.currentIndex()
         _, mode = _MODE_MAP[idx]
-        self._transport.send_packet(build_set_detect(mode))
+        self._transport.send_vesc_to_target(build_set_detect(mode))
         self._streaming = True
         self._current_mode = mode
         self._sample_count = 0
@@ -246,7 +246,7 @@ class PositionTab(QWidget):
 
     def _stop_streaming(self):
         if self._transport.is_connected():
-            self._transport.send_packet(build_set_detect(DISP_POS_MODE_NONE))
+            self._transport.send_vesc_to_target(build_set_detect(DISP_POS_MODE_NONE))
         self._streaming = False
         self.start_btn.setText("Start Streaming")
         self.start_btn.setStyleSheet(

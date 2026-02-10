@@ -24,8 +24,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QMetaObject, Q_ARG, Qt as QtCore
 
-from ..protocol.serial_transport import SerialTransport
+from ..protocol.can_transport import PcanTransport
 from ..protocol.commands import VescValues, build_get_values, build_set_pid_gains, McconfPid, build_set_mcconf_with_pid
+from ..protocol.can_commands import build_speed_closed_loop, build_motor_off
 from ..analysis.signal_metrics import MotorMetrics, analyze_speed_control
 from ..analysis.current_metrics import CurrentMetrics, analyze_current_step, analyze_current_steady_state
 from ..analysis.llm_advisor import LLMAdvisor, PIDGains, AnalysisResult, CurrentControlAdvisor, FOCCurrentGains
@@ -38,7 +39,7 @@ class AnalysisTab(QWidget):
     _llm_result_signal = pyqtSignal(object)
     _llm_error_signal = pyqtSignal(str)
 
-    def __init__(self, transport: SerialTransport):
+    def __init__(self, transport: PcanTransport):
         super().__init__()
         self._transport = transport
         self._advisor = None
@@ -588,7 +589,7 @@ class AnalysisTab(QWidget):
             QMessageBox.warning(self, "Not connected", "Connect to VESC first.")
             return
         from ..protocol.commands import build_get_mcconf
-        self._transport.send_packet(build_get_mcconf())
+        self._transport.send_vesc_to_target(build_get_mcconf())
         self.ai_text.setPlainText("Sent COMM_GET_MCCONF (14) to VESC.\nWaiting for response...")
 
     def on_mcconf_received(self, pid: McconfPid, raw_data: bytes = None):
@@ -676,7 +677,7 @@ class AnalysisTab(QWidget):
             return
         from ..protocol.commands import build_get_mcconf_default
         self._requesting_default = True
-        self._transport.send_packet(build_get_mcconf_default())
+        self._transport.send_vesc_to_target(build_get_mcconf_default())
         self.ai_text.setPlainText("Sent COMM_GET_MCCONF_DEFAULT (15) to VESC.\nWaiting for default configuration...")
 
     def _update_api_status(self):
@@ -757,11 +758,10 @@ class AnalysisTab(QWidget):
             self._poll_timer.deleteLater()
             self._poll_timer = None
 
-        # For Speed Control mode, start motor automatically
+        # For Speed Control mode, start motor automatically via RMD
         if self._control_mode == "speed":
-            from ..protocol.commands import build_set_rpm
             target_rpm = int(self.target_spin.value())
-            self._transport.send_packet(build_set_rpm(target_rpm))
+            self._transport.send_frame(build_speed_closed_loop(target_rpm, mode=1))
 
         # Timer for sending COMM_GET_VALUES
         self._poll_timer = QTimer(self)
@@ -777,13 +777,12 @@ class AnalysisTab(QWidget):
         self.collect_progress.setValue(progress)
 
         if self._transport.is_connected():
-            # For Speed Control mode: keep sending RPM command (VESC timeout)
+            # For Speed Control mode: keep sending RPM command via RMD
             if self._control_mode == "speed":
-                from ..protocol.commands import build_set_rpm
                 target_rpm = int(self.target_spin.value())
-                self._transport.send_packet(build_set_rpm(target_rpm))
+                self._transport.send_frame(build_speed_closed_loop(target_rpm, mode=1))
 
-            self._transport.send_packet(build_get_values())
+            self._transport.send_vesc_to_target(build_get_values())
 
         if elapsed >= self._poll_duration:
             self._poll_timer.stop()
@@ -792,10 +791,9 @@ class AnalysisTab(QWidget):
             self.collect_btn.setText("Collect & Analyze")
             self.collect_progress.setValue(100)
 
-            # Stop motor after collection
+            # Stop motor after collection via RMD
             if self._transport.is_connected():
-                from ..protocol.commands import build_set_current
-                self._transport.send_packet(build_set_current(0.0))  # Stop motor
+                self._transport.send_frame(build_motor_off())
             self._run_local_analysis()
 
     def _run_local_analysis(self):
@@ -1099,7 +1097,7 @@ class AnalysisTab(QWidget):
                 self._original_mcconf,
                 pid.kp, pid.ki,  # Use Kp, Ki for FOC current gains
             )
-            self._transport.send_packet(packet)
+            self._transport.send_vesc_to_target(packet)
 
             # Update current gains display
             self.pid_kp.setValue(pid.kp)
@@ -1126,7 +1124,7 @@ class AnalysisTab(QWidget):
             position_mode=False,
             ramp_erpms_s=pid.ramp_erpms_s,
         )
-        self._transport.send_packet(packet)
+        self._transport.send_vesc_to_target(packet)
 
         # Update current PID display
         self.pid_kp.setValue(pid.kp)
@@ -1347,10 +1345,9 @@ class AnalysisTab(QWidget):
     def stop_auto_tune(self):
         if self._auto_tuner:
             self._auto_tuner.stop()
-            # Immediately stop motor as safety measure
-            from ..protocol.commands import build_set_current
+            # Immediately stop motor as safety measure via RMD
             if self._transport.is_connected():
-                self._transport.send_packet(build_set_current(0.0))
+                self._transport.send_frame(build_motor_off())
                 self.ai_text.append("\n[Auto-Tune] Stop requested - motor stopped.")
 
     def _on_tune_status(self, msg: str):
@@ -1415,10 +1412,9 @@ class AnalysisTab(QWidget):
     def _on_tune_finished(self, reason: str):
         self.ai_text.append(f"\n[Auto-Tune Finished] {reason}")
 
-        # Ensure motor is stopped
-        from ..protocol.commands import build_set_current
+        # Ensure motor is stopped via RMD
         if self._transport.is_connected():
-            self._transport.send_packet(build_set_current(0.0))
+            self._transport.send_frame(build_motor_off())
             self.ai_text.append("[Motor stopped]")
 
         self.autotune_btn.setEnabled(True)

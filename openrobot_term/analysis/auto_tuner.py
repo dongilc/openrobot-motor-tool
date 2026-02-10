@@ -12,11 +12,11 @@ from collections import deque
 import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal, QCoreApplication
 
-from ..protocol.serial_transport import SerialTransport
+from ..protocol.can_transport import PcanTransport
 from ..protocol.commands import (
     CommPacketId, VescValues, build_get_values, build_set_mcconf_with_pid,
-    build_set_rpm, build_set_pos, build_set_current,
 )
+from ..protocol.can_commands import build_speed_closed_loop, build_position_closed_loop_1, build_motor_off
 from .signal_metrics import MotorMetrics, analyze_speed_control
 from .llm_advisor import LLMAdvisor, PIDGains, AnalysisResult
 
@@ -44,7 +44,7 @@ class AutoTuner(QThread):
 
     def __init__(
         self,
-        transport: SerialTransport,
+        transport: PcanTransport,
         advisor: LLMAdvisor,
         target_rpm: float,
         initial_pid: PIDGains,
@@ -163,7 +163,7 @@ class AutoTuner(QThread):
                     return
                 # Keep motor running + request values
                 self._start_motor()
-                self._transport.send_packet(build_get_values())
+                self._transport.send_vesc_to_target(build_get_values())
                 progress = (time.time() - t0) / total_collect_time
                 self.data_collecting.emit(min(1.0, progress))
                 QCoreApplication.processEvents()
@@ -388,7 +388,7 @@ class AutoTuner(QThread):
                 position_mode=False,
                 ramp_erpms_s=pid.ramp_erpms_s
             )
-        self._transport.send_packet(packet)
+        self._transport.send_vesc_to_target(packet)
 
     def _run_verification_test(self, best_iteration: int) -> float:
         """Run verification test after rollback to confirm performance."""
@@ -422,7 +422,7 @@ class AutoTuner(QThread):
                 self._stop_motor()
                 return 0.0
             self._start_motor()
-            self._transport.send_packet(build_get_values())
+            self._transport.send_vesc_to_target(build_get_values())
             progress = (time.time() - t0) / total_collect_time
             self.data_collecting.emit(min(1.0, progress))
             QCoreApplication.processEvents()
@@ -484,12 +484,12 @@ class AutoTuner(QThread):
         )
 
     def _start_motor(self):
-        """Start motor at target speed/position."""
+        """Start motor at target speed/position via RMD CAN."""
         if self._position_mode:
-            self._transport.send_packet(build_set_pos(self._target_rpm))  # target_rpm is actually target_pos
+            self._transport.send_frame(build_position_closed_loop_1(self._target_rpm))  # target_rpm is actually target_pos
         else:
-            self._transport.send_packet(build_set_rpm(int(self._target_rpm)))
+            self._transport.send_frame(build_speed_closed_loop(int(self._target_rpm), mode=1))
 
     def _stop_motor(self):
-        """Stop motor by setting current to 0."""
-        self._transport.send_packet(build_set_current(0.0))
+        """Stop motor via RMD motor off command."""
+        self._transport.send_frame(build_motor_off())

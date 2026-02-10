@@ -20,8 +20,9 @@ from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 import numpy as np
 import pyqtgraph as pg
 
-from ..protocol.serial_transport import SerialTransport
-from ..protocol.commands import WaveformSamples, build_sample_request, build_set_rpm
+from ..protocol.can_transport import PcanTransport
+from ..protocol.commands import WaveformSamples, build_sample_request
+from ..protocol.can_commands import build_speed_closed_loop, build_motor_off
 from ..analysis.signal_metrics import compute_fft, compute_thd, foc_lp_filter
 from .plot_style import style_plot, graph_pen, Crosshair, style_legend, GRAPH_COLORS
 
@@ -34,7 +35,7 @@ class WaveformTab(QWidget):
     _ai_result_signal = pyqtSignal(object)
     _ai_error_signal = pyqtSignal(str)
 
-    def __init__(self, transport: SerialTransport):
+    def __init__(self, transport: PcanTransport):
         super().__init__()
         self._transport = transport
         self._samples = WaveformSamples()
@@ -310,7 +311,7 @@ class WaveformTab(QWidget):
             settle_ms = self.settle_spin.value()
 
             self._target_rpm = rpm
-            self._transport.send_packet(build_set_rpm(rpm))
+            self._transport.send_frame(build_speed_closed_loop(rpm, mode=1))
             # Start keepalive timer to maintain motor running (VESC timeout is typically 250ms)
             self._rpm_keepalive_timer.start(100)  # Send every 100ms
 
@@ -334,7 +335,7 @@ class WaveformTab(QWidget):
         self._capturing = True
         n = self.samples_spin.value()
         d = self.decim_spin.value()
-        self._transport.send_packet(build_sample_request(n, d))
+        self._transport.send_vesc_to_target(build_sample_request(n, d))
         self.capture_btn.setText("Capturing...")
         self.info_label.setText(f"Requesting {n} samples (dec={d})...")
         self._timeout_timer.start(CAPTURE_TIMEOUT_MS)
@@ -342,15 +343,15 @@ class WaveformTab(QWidget):
     def _send_rpm_keepalive(self):
         """Send periodic RPM command to keep motor running."""
         if self._transport.is_connected() and self._target_rpm != 0:
-            self._transport.send_packet(build_set_rpm(self._target_rpm))
+            self._transport.send_frame(build_speed_closed_loop(self._target_rpm, mode=1))
 
     def _stop_motor(self):
-        """Stop motor (set RPM to 0)."""
+        """Stop motor via RMD motor off command."""
         self._rpm_keepalive_timer.stop()
         self._auto_stop_timer.stop()
         self._target_rpm = 0
         if self._transport.is_connected():
-            self._transport.send_packet(build_set_rpm(0))
+            self._transport.send_frame(build_motor_off())
             # Don't overwrite analysis info; append motor status
             cur = self.info_label.text()
             if cur and "samples" in cur:

@@ -9,12 +9,12 @@ from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTabWidget, QTreeWidget, QTreeWidgetItem, QFileDialog, QMessageBox,
-    QSpinBox, QMenu, QLineEdit,
+    QSpinBox, QMenu, QLineEdit, QComboBox,
 )
 from PyQt6.QtGui import QFont, QColor
 from PyQt6.QtCore import Qt, pyqtSignal
 
-from ..protocol.serial_transport import SerialTransport
+from ..protocol.can_transport import PcanTransport
 from ..protocol.commands import (
     CommPacketId,
     build_get_mcconf, build_get_mcconf_default,
@@ -32,8 +32,9 @@ _DIRTY_COLOR = QColor("#FFDD57")  # yellow-ish
 
 class ParameterTab(QWidget):
     log_message = pyqtSignal(str)  # emitted to show messages in Terminal dock
+    rescan_requested = pyqtSignal()  # CAN ID changed — trigger re-scan
 
-    def __init__(self, transport: SerialTransport):
+    def __init__(self, transport: PcanTransport):
         super().__init__()
         self._transport = transport
         self._mcconf_values: OrderedDict | None = None
@@ -332,13 +333,13 @@ class ParameterTab(QWidget):
             if defaults is not None and name in defaults:
                 # Defaults already loaded — apply immediately
                 self._set_item_value(item, name, defaults[name], values, is_mc)
-            elif self._transport.is_connected:
+            elif self._transport.is_connected():
                 # Auto-read defaults, then apply this field
                 self._pending_default = (name, item, is_mc)
                 if is_mc:
-                    self._transport.send_packet(build_get_mcconf_default())
+                    self._transport.send_vesc_to_target(build_get_mcconf_default())
                 else:
-                    self._transport.send_packet(build_get_appconf_default())
+                    self._transport.send_vesc_to_target(build_get_appconf_default())
                 self.status_label.setText("Reading defaults from VESC...")
         elif chosen == act_original and original is not None and name in original:
             self._set_item_value(item, name, original[name], values, is_mc)
@@ -544,21 +545,24 @@ class ParameterTab(QWidget):
 
     # ── Button handlers: Read ─────────────────────────────────────────
 
+    def _send_via_can(self, payload: bytes):
+        """Send a VESC command via CAN EID to current target."""
+        if self._transport.is_connected():
+            self._transport.send_vesc_to_target(payload)
+            return True
+        return False
+
     def _on_read_mcconf(self):
-        if self._transport.is_connected:
-            self._transport.send_packet(build_get_mcconf())
+        self._send_via_can(build_get_mcconf())
 
     def _on_read_appconf(self):
-        if self._transport.is_connected:
-            self._transport.send_packet(build_get_appconf())
+        self._send_via_can(build_get_appconf())
 
     def _on_read_mcconf_default(self):
-        if self._transport.is_connected:
-            self._transport.send_packet(build_get_mcconf_default())
+        self._send_via_can(build_get_mcconf_default())
 
     def _on_read_appconf_default(self):
-        if self._transport.is_connected:
-            self._transport.send_packet(build_get_appconf_default())
+        self._send_via_can(build_get_appconf_default())
 
     # ── Button handlers: Write ────────────────────────────────────────
 
@@ -567,15 +571,15 @@ class ParameterTab(QWidget):
             QMessageBox.warning(self, "No Data",
                                 "No MCCONF data. Read from VESC first.")
             return
-        if not self._transport.is_connected:
+
+        if not self._transport.is_connected():
             QMessageBox.warning(self, "Not Connected",
-                                "Connect to VESC first.")
+                                "Open PCAN connection first.")
             return
 
         n_dirty = len(self._mc_dirty)
-        msg = f"Write MCCONF to VESC?\n\n{n_dirty} parameter(s) modified."
+        msg = f"Write MCCONF to VESC (CAN)?\n\n{n_dirty} parameter(s) modified."
         if n_dirty > 0:
-            # Show up to 10 changed params
             sample = list(self._mc_dirty)[:10]
             msg += "\n\nChanged: " + ", ".join(sample)
             if n_dirty > 10:
@@ -590,12 +594,12 @@ class ParameterTab(QWidget):
 
         data = serialize_conf(self._mcconf_values, MCCONF_FIELDS, MCCONF_SIGNATURE)
         packet = bytes([CommPacketId.COMM_SET_MCCONF]) + data
-        self._transport.send_packet(packet)
+        self._send_via_can(packet)
 
         self._mc_dirty.clear()
         self._clear_dirty_highlight(self.mc_tree)
         self.status_label.setText(
-            f"Wrote MCCONF ({len(data)} bytes) at "
+            f"Wrote MCCONF ({len(data)} bytes, CAN) at "
             f"{datetime.now().strftime('%H:%M:%S')}"
         )
 
@@ -604,18 +608,32 @@ class ParameterTab(QWidget):
             QMessageBox.warning(self, "No Data",
                                 "No APPCONF data. Read from VESC first.")
             return
-        if not self._transport.is_connected:
+
+        if not self._transport.is_connected():
             QMessageBox.warning(self, "Not Connected",
-                                "Connect to VESC first.")
+                                "Open PCAN connection first.")
             return
 
+        # Detect controller_id change before writing
+        id_changed = False
+        old_id = self._transport.motor_id
+        if (self._appconf_original is not None
+                and 'controller_id' in self._app_dirty):
+            new_id = self._appconf_values.get('controller_id')
+            orig_id = self._appconf_original.get('controller_id')
+            if new_id is not None and orig_id is not None and new_id != orig_id:
+                id_changed = True
+
         n_dirty = len(self._app_dirty)
-        msg = f"Write APPCONF to VESC?\n\n{n_dirty} parameter(s) modified."
+        msg = f"Write APPCONF to VESC (CAN)?\n\n{n_dirty} parameter(s) modified."
         if n_dirty > 0:
             sample = list(self._app_dirty)[:10]
             msg += "\n\nChanged: " + ", ".join(sample)
             if n_dirty > 10:
                 msg += f" ... (+{n_dirty - 10} more)"
+        if id_changed:
+            msg += (f"\n\nCAN ID changed ({orig_id} -> {new_id})."
+                    f"\nWill re-scan to find device at new ID.")
 
         ret = QMessageBox.question(
             self, "Write APPCONF", msg,
@@ -626,14 +644,21 @@ class ParameterTab(QWidget):
 
         data = serialize_conf(self._appconf_values, APPCONF_FIELDS, APPCONF_SIGNATURE)
         packet = bytes([CommPacketId.COMM_SET_APPCONF]) + data
-        self._transport.send_packet(packet)
+        self._send_via_can(packet)
 
         self._app_dirty.clear()
         self._clear_dirty_highlight(self.app_tree)
         self.status_label.setText(
-            f"Wrote APPCONF ({len(data)} bytes) at "
+            f"Wrote APPCONF ({len(data)} bytes, CAN) at "
             f"{datetime.now().strftime('%H:%M:%S')}"
         )
+
+        # Re-scan if controller_id was changed (firmware applies new ID immediately)
+        if id_changed:
+            self.log_message.emit(
+                f"[APPCONF] CAN ID changed ({orig_id} -> {new_id}), re-scanning ..."
+            )
+            self.rescan_requested.emit()
 
     def _calc_power_loss(self) -> float:
         """Calculate max_power_loss from motor wattage (25% of rated power)."""
@@ -646,9 +671,9 @@ class ParameterTab(QWidget):
 
     def _on_detect_motor(self):
         """Send foc_detect_apply_all terminal command."""
-        if not self._transport.is_connected:
+        if not self._transport.is_connected():
             QMessageBox.warning(self, "Not Connected",
-                                "Connect to VESC first.")
+                                "Open PCAN connection first.")
             return
 
         power = self._calc_power_loss()
@@ -667,7 +692,7 @@ class ParameterTab(QWidget):
             return
 
         cmd = f"foc_detect_apply_all {power:.1f}"
-        self._transport.send_packet(build_terminal_cmd(cmd))
+        self._transport.send_vesc_to_target(build_terminal_cmd(cmd))
         self.log_message.emit(f"[CMD] > {cmd}")
         self.status_label.setText(
             f"Sent: {cmd} at {datetime.now().strftime('%H:%M:%S')} — check Terminal for results"
@@ -705,7 +730,7 @@ class ParameterTab(QWidget):
                         self._mcconf_values, True)
                     self.status_label.setText(
                         f"Loaded default for {pname}")
-                    return  # don't overwrite current tree
+            return  # don't overwrite current tree with defaults
 
         # MCU = what MCU has now (fixed), Tool = working copy (editable)
         self._mcconf_original = OrderedDict(new_values)

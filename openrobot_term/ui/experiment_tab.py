@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer
 
-from ..protocol.serial_transport import SerialTransport
+from ..protocol.can_transport import PcanTransport
 from ..protocol.commands import build_terminal_cmd
 from .plot_style import style_plot, graph_pen, style_legend, TEXT_NORMAL
 
@@ -27,7 +27,7 @@ RENDER_INTERVAL_MS = 33  # ~30 fps
 
 
 class ExperimentTab(QWidget):
-    def __init__(self, transport: SerialTransport):
+    def __init__(self, transport: PcanTransport):
         super().__init__()
         self._transport = transport
         self._dirty = False
@@ -119,7 +119,7 @@ class ExperimentTab(QWidget):
             self.status_label.setText("Not connected")
             return
         # "or_rp" toggles streaming on/off in firmware
-        self._transport.send_packet(build_terminal_cmd("or_rp"))
+        self._transport.send_vesc_to_target(build_terminal_cmd("or_rp"))
         if self._streaming:
             self._set_streaming(False)
         else:

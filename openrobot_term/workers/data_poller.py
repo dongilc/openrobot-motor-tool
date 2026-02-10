@@ -1,12 +1,14 @@
 """
-Periodic COMM_GET_VALUES poller thread.
+Periodic COMM_GET_VALUES poller thread (CAN EID).
 """
 
 import time
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from ..protocol.serial_transport import SerialTransport
+from ..protocol.can_transport import PcanTransport
 from ..protocol.commands import build_get_values
+
+MIN_INTERVAL_MS = 20  # 50 Hz max — CAN bandwidth protection
 
 
 class DataPoller(QThread):
@@ -14,10 +16,10 @@ class DataPoller(QThread):
 
     tick = pyqtSignal()  # emitted after each request sent (for timing debug)
 
-    def __init__(self, transport: SerialTransport, interval_ms: int = 50):
+    def __init__(self, transport: PcanTransport, interval_ms: int = 50):
         super().__init__()
         self._transport = transport
-        self._interval_s = interval_ms / 1000.0
+        self._interval_s = max(interval_ms, MIN_INTERVAL_MS) / 1000.0
         self._running = False
 
     @property
@@ -26,7 +28,7 @@ class DataPoller(QThread):
 
     @interval_ms.setter
     def interval_ms(self, ms: int):
-        self._interval_s = ms / 1000.0
+        self._interval_s = max(ms, MIN_INTERVAL_MS) / 1000.0
 
     def start(self):
         """Start polling. Sets running flag before thread starts to avoid race."""
@@ -37,7 +39,7 @@ class DataPoller(QThread):
         # Don't set _running here - it's set in start() to avoid race condition
         while self._running:
             if self._transport.is_connected():
-                self._transport.send_packet(build_get_values())
+                self._transport.send_vesc_to_target(build_get_values())
                 self.tick.emit()
             time.sleep(self._interval_s)
 

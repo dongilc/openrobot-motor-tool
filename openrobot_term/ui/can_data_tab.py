@@ -13,6 +13,7 @@ from PyQt6.QtWidgets import (
     QMessageBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QSplitter, QFileDialog, QApplication,
 )
+from PyQt6.QtGui import QColor
 from PyQt6.QtCore import Qt, QTimer, QEvent, pyqtSignal
 
 import numpy as np
@@ -20,14 +21,15 @@ import pyqtgraph as pg
 
 from ..protocol.can_transport import PcanTransport
 from ..protocol.can_commands import (
-    RmdCommand, RmdStatus, RmdStatus3,
+    CAN_HEADER_ID, RmdCommand, RmdStatus, RmdStatus3,
     parse_pid, parse_encoder, parse_multi_turn_angle,
     parse_max_current,
     build_read_encoder, build_read_multi_turn_angle,
     build_write_encoder_offset, build_write_current_pos_to_rom,
-    build_read_pid, build_write_pid_to_ram, build_write_pid_to_rom,
+    build_read_pid, build_write_pid_to_rom,
     build_read_fault_code, build_read_max_current,
     build_write_max_current_to_rom,
+    build_motor_off,
 )
 from ..workers.can_poller import CanPoller
 from .plot_style import style_plot, graph_pen, style_legend, set_curve_visible
@@ -112,6 +114,7 @@ class CanDataTab(QWidget):
         self._enc_offset = 0.0
         self._mt_init_angle = None  # multiturn angle read at polling start
         self._last_status3 = None   # latest 0x9D data
+        self._discovered_ids: list[int] = []  # populated by CAN scan
 
         # Buffers
         self._rb_time = _GrowBuffer(BUF_CAP)
@@ -139,6 +142,7 @@ class CanDataTab(QWidget):
         self._transport.status_received.connect(self._on_status)
         self._transport.status3_received.connect(self._on_status3)
         self._transport.multiturn_received.connect(self._on_multiturn_init)
+        self._transport.fault_detected.connect(self._on_fault_detected)
 
         # Render timer
         self._render_timer = QTimer(self)
@@ -146,19 +150,31 @@ class CanDataTab(QWidget):
         self._render_timer.timeout.connect(self._render_frame)
         self._render_timer.start()
 
+    def showEvent(self, event):
+        """Auto-read config values from MCU when tab becomes visible."""
+        super().showEvent(event)
+        if self._transport.is_connected():
+            self._send_once(build_read_encoder())
+            QTimer.singleShot(50, lambda: self._send_once(build_read_multi_turn_angle()))
+            QTimer.singleShot(100, lambda: self._send_once(build_read_pid()))
+            QTimer.singleShot(150, lambda: self._send_once(build_read_max_current()))
+
     def _build_ui(self):
         layout = QVBoxLayout(self)
         layout.setSpacing(4)
 
         # ═══ Top: Encoder | PID | Current | Diagnostics ═══
         top = QGridLayout()
-        top.setSpacing(6)
+        top.setSpacing(4)
         layout.addLayout(top)
+
+        _grp_margin = (4, 2, 4, 2)  # left, top, right, bottom
 
         # ── Encoder Config ──
         enc_group = QGroupBox("Encoder Config")
         el = QVBoxLayout(enc_group)
-        el.setSpacing(4)
+        el.setContentsMargins(*_grp_margin)
+        el.setSpacing(2)
 
         enc_btn_row = QHBoxLayout()
         read_enc_btn = QPushButton("Read Encoder")
@@ -169,44 +185,38 @@ class CanDataTab(QWidget):
         enc_btn_row.addWidget(read_mt_btn)
         el.addLayout(enc_btn_row)
 
-        # Encoder readout labels
-        info_grid = QGridLayout()
-        info_grid.setSpacing(2)
+        # Encoder readout: Pos | Offset | Multi-turn in one row
         lbl_style = "font-family: monospace; font-size: 11px; color: #66ff66;"
         name_style = "font-size: 11px; font-weight: bold;"
 
-        self.enc_lbl_pos = QLabel("--")
-        self.enc_lbl_pos.setStyleSheet(lbl_style)
-        info_grid.addWidget(QLabel("Pos:"), 0, 0)
-        info_grid.addWidget(self.enc_lbl_pos, 0, 1)
+        info_row = QHBoxLayout()
+        info_row.setSpacing(8)
+        for name, attr in [("Pos:", "enc_lbl_pos"), ("Offset:", "enc_lbl_offset"), ("Multi-turn:", "enc_lbl_multiturn")]:
+            lb = QLabel(name)
+            lb.setStyleSheet(name_style)
+            info_row.addWidget(lb)
+            val = QLabel("--")
+            val.setStyleSheet(lbl_style)
+            val.setMinimumWidth(40)
+            info_row.addWidget(val, stretch=1)
+            setattr(self, attr, val)
+        el.addLayout(info_row)
 
-        self.enc_lbl_offset = QLabel("--")
-        self.enc_lbl_offset.setStyleSheet(lbl_style)
-        info_grid.addWidget(QLabel("Offset:"), 0, 2)
-        info_grid.addWidget(self.enc_lbl_offset, 0, 3)
-
-        self.enc_lbl_multiturn = QLabel("--")
-        self.enc_lbl_multiturn.setStyleSheet(lbl_style)
-        info_grid.addWidget(QLabel("Multi-turn:"), 1, 0)
-        info_grid.addWidget(self.enc_lbl_multiturn, 1, 1, 1, 3)
-
-        for c in (0, 2):
-            w = info_grid.itemAtPosition(0, c)
-            if w:
-                w.widget().setStyleSheet(name_style)
-        info_grid.itemAtPosition(1, 0).widget().setStyleSheet(name_style)
-        el.addLayout(info_grid)
-
-        # Offset write row
+        # Offset write row: [spinbox] [Write Offset] [Write ROM]
         offset_row = QHBoxLayout()
-        offset_row.addWidget(QLabel("Offset:"))
+        offset_row.setSpacing(4)
+        ofs_label = QLabel("Offset:")
+        ofs_label.setStyleSheet(name_style)
+        offset_row.addWidget(ofs_label)
         self.enc_offset_spin = QSpinBox()
         self.enc_offset_spin.setRange(-16383, 16383)
-        offset_row.addWidget(self.enc_offset_spin, stretch=1)
+        self.enc_offset_spin.setMaximumWidth(90)
+        offset_row.addWidget(self.enc_offset_spin)
         write_offset_btn = QPushButton("Write Offset")
         write_offset_btn.clicked.connect(self._write_encoder_offset)
         offset_row.addWidget(write_offset_btn)
-        write_rom_btn = QPushButton("Write Current Position to ROM as Motor Zero")
+        offset_row.addSpacing(8)
+        write_rom_btn = QPushButton("Write Current Pos to ROM as Motor Zero")
         write_rom_btn.setStyleSheet(
             "QPushButton { background-color: #884400; color: white; }"
             "QPushButton:pressed { background-color: #663300; }"
@@ -216,10 +226,11 @@ class CanDataTab(QWidget):
         el.addLayout(offset_row)
         top.addWidget(enc_group, 0, 0)
 
-        # ── PID ──
-        pid_group = QGroupBox("PID")
+        # ── Position Control PID ──
+        pid_group = QGroupBox("Position Control PID")
         pid_layout = QGridLayout(pid_group)
-        pid_layout.setSpacing(4)
+        pid_layout.setContentsMargins(*_grp_margin)
+        pid_layout.setSpacing(2)
         for row_i, (name, attr) in enumerate([("Kp", "pid_kp"), ("Ki", "pid_ki"), ("Kd", "pid_kd")]):
             pid_layout.addWidget(QLabel(f"{name}:"), row_i, 0)
             spin = QDoubleSpinBox()
@@ -232,9 +243,6 @@ class CanDataTab(QWidget):
         read_pid_btn = QPushButton("Read")
         read_pid_btn.clicked.connect(lambda: self._send_once(build_read_pid()))
         pid_btn_row.addWidget(read_pid_btn)
-        write_pid_ram_btn = QPushButton("Write RAM")
-        write_pid_ram_btn.clicked.connect(self._write_pid_ram)
-        pid_btn_row.addWidget(write_pid_ram_btn)
         write_pid_rom_btn = QPushButton("Write ROM")
         write_pid_rom_btn.setStyleSheet(
             "QPushButton { background-color: #884400; color: white; }"
@@ -245,10 +253,11 @@ class CanDataTab(QWidget):
         pid_layout.addLayout(pid_btn_row, 3, 0, 1, 2)
         top.addWidget(pid_group, 0, 1)
 
-        # ── Current ──
-        curr_group = QGroupBox("Current")
+        # ── Current Setting ──
+        curr_group = QGroupBox("Current Setting")
         cl = QVBoxLayout(curr_group)
-        cl.setSpacing(4)
+        cl.setContentsMargins(*_grp_margin)
+        cl.setSpacing(2)
 
         curr_grid = QGridLayout()
         curr_grid.setSpacing(2)
@@ -294,20 +303,36 @@ class CanDataTab(QWidget):
         cl.addLayout(curr_btn_row)
         top.addWidget(curr_group, 0, 2)
 
-        # ── Diagnostics ──
-        diag_group = QGroupBox("Diagnostics")
+        # ── Fault Log ──
+        diag_group = QGroupBox("Fault Log")
         diag_layout = QVBoxLayout(diag_group)
-        diag_layout.setSpacing(4)
+        diag_layout.setContentsMargins(*_grp_margin)
+        diag_layout.setSpacing(2)
+
         fault_btn = QPushButton("Read Fault Code")
         fault_btn.clicked.connect(lambda: self._send_once(build_read_fault_code()))
         diag_layout.addWidget(fault_btn)
-        diag_layout.addStretch()
+
+        # Fault log table (fills remaining height)
+        self.fault_table = QTableWidget(0, 3)
+        self.fault_table.setHorizontalHeaderLabels(["Time", "Motor ID", "Fault"])
+        self.fault_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.ResizeMode.Stretch)
+        self.fault_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.fault_table.verticalHeader().setDefaultSectionSize(20)
+        self.fault_table.verticalHeader().hide()
+        diag_layout.addWidget(self.fault_table)
+
         top.addWidget(diag_group, 0, 3)
 
-        top.setColumnStretch(0, 3)
+        # All groups same max height — Current (tallest content) is ~130px
+        for grp in (enc_group, pid_group, curr_group, diag_group):
+            grp.setMaximumHeight(140)
+
+        top.setColumnStretch(0, 2)
         top.setColumnStretch(1, 2)
         top.setColumnStretch(2, 2)
-        top.setColumnStretch(3, 1)
+        top.setColumnStretch(3, 3)
 
         # ═══ Graph controls bar ═══
         ctrl = QHBoxLayout()
@@ -319,7 +344,7 @@ class CanDataTab(QWidget):
 
         ctrl.addWidget(QLabel("Rate:"))
         self.rate_combo = QComboBox()
-        for r in ["10 Hz", "20 Hz", "50 Hz", "100 Hz", "200 Hz", "500 Hz", "1000 Hz"]:
+        for r in ["10 Hz", "20 Hz", "50 Hz", "100 Hz"]:
             self.rate_combo.addItem(r)
         self.rate_combo.setCurrentText("100 Hz")
         self.rate_combo.currentTextChanged.connect(self._on_rate_changed)
@@ -570,6 +595,27 @@ class CanDataTab(QWidget):
             return
         self._transport.send_frame(data)
 
+    def _on_fault_detected(self, motor_id: int, fault_code: int, fault_name: str):
+        """Handle fault broadcast from firmware: auto-stop the faulted motor, log it."""
+        # Send Motor Off to the faulted motor
+        if self._transport.is_connected():
+            self._transport.send_frame_to(motor_id, build_motor_off())
+
+        # Add to fault log table
+        ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        row = self.fault_table.rowCount()
+        self.fault_table.insertRow(row)
+        self.fault_table.setItem(row, 0, QTableWidgetItem(ts))
+        self.fault_table.setItem(row, 1, QTableWidgetItem(str(motor_id)))
+        fault_item = QTableWidgetItem(fault_name)
+        fault_item.setForeground(QColor("#FF5252"))
+        self.fault_table.setItem(row, 2, fault_item)
+        self.fault_table.scrollToBottom()
+
+    def update_discovered_ids(self, ids: list[int]):
+        """Called from main_window when CAN scan finds motor IDs."""
+        self._discovered_ids = list(ids)
+
     def _write_encoder_offset(self):
         if not self._transport.is_connected():
             return
@@ -600,12 +646,6 @@ class CanDataTab(QWidget):
                 self.curr_abs_max.value(), self.curr_bat_max.value(),
             ))
 
-    def _write_pid_ram(self):
-        if not self._transport.is_connected():
-            return
-        self._transport.send_frame(
-            build_write_pid_to_ram(self.pid_kp.value(), self.pid_ki.value(), self.pid_kd.value())
-        )
 
     def _write_pid_rom(self):
         if not self._transport.is_connected():

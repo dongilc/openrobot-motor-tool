@@ -1,5 +1,5 @@
 """
-Terminal tab: log view + command input (extracted from original MainWindow).
+Terminal tab: log view + command input (CAN EID).
 """
 
 from PyQt6.QtWidgets import (
@@ -8,12 +8,12 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QTextCursor
 
-from ..protocol.serial_transport import SerialTransport
+from ..protocol.can_transport import PcanTransport
 from ..protocol.commands import build_terminal_cmd, build_get_fw_version
 
 
 class TerminalTab(QWidget):
-    def __init__(self, transport: SerialTransport):
+    def __init__(self, transport: PcanTransport):
         super().__init__()
         self._transport = transport
 
@@ -48,9 +48,6 @@ class TerminalTab(QWidget):
         self.test_btn.clicked.connect(self.on_test_connection)
         row.addWidget(self.test_btn)
 
-        # Connect transport text signal
-        self._transport.text_received.connect(self.on_text_received)
-
     def log(self, s: str):
         self.log_view.moveCursor(QTextCursor.MoveOperation.End)
         self.log_view.insertPlainText(s)
@@ -58,19 +55,16 @@ class TerminalTab(QWidget):
             self.log_view.insertPlainText("\n")
         self.log_view.ensureCursorVisible()
 
-    def on_text_received(self, text: str):
-        self.log(text.rstrip("\0"))
-
     def on_send(self):
         if not self._transport.is_connected():
-            QMessageBox.warning(self, "Not connected", "Connect to a COM port first.")
+            QMessageBox.warning(self, "Not connected", "Open PCAN connection first.")
             return
 
         cmd = self.cmd_edit.text()
         self.cmd_edit.clear()
 
         try:
-            self._transport.send_packet(build_terminal_cmd(cmd))
+            self._transport.send_vesc_to_target(build_terminal_cmd(cmd))
             if cmd:
                 self.log(f"> {cmd}")
         except Exception as e:
@@ -83,11 +77,11 @@ class TerminalTab(QWidget):
     def on_test_connection(self):
         """Send COMM_FW_VERSION to test basic communication."""
         if not self._transport.is_connected():
-            QMessageBox.warning(self, "Not connected", "Connect to a COM port first.")
+            QMessageBox.warning(self, "Not connected", "Open PCAN connection first.")
             return
 
         try:
-            self._transport.send_packet(build_get_fw_version())
+            self._transport.send_vesc_to_target(build_get_fw_version())
             self.log("[TEST] Sent COMM_FW_VERSION request... waiting for response")
         except Exception as e:
             self.log(f"[ERROR] Test failed: {e}")

@@ -16,7 +16,6 @@ import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal, QCoreApplication
 
 from ..protocol.can_transport import PcanTransport
-from ..protocol.serial_transport import SerialTransport
 from ..protocol.can_commands import (
     RmdStatus,
     build_speed_closed_loop,
@@ -49,7 +48,6 @@ class CanSpeedAutoTuner(QThread):
     def __init__(
         self,
         can_transport: PcanTransport,
-        serial_transport: SerialTransport,
         advisor: LLMAdvisor,
         target_erpm: int,
         initial_pid: PIDGains,
@@ -62,7 +60,6 @@ class CanSpeedAutoTuner(QThread):
     ):
         super().__init__()
         self._can = can_transport
-        self._serial = serial_transport
         self._advisor = advisor
         self._target_erpm = target_erpm
         self._current_pid = initial_pid
@@ -341,7 +338,7 @@ class CanSpeedAutoTuner(QThread):
         self._can.send_frame(build_motor_off())
 
     def _apply_pid(self, pid: PIDGains, label: str):
-        """Apply speed PID to VESC via serial MCCONF."""
+        """Apply speed PID to VESC via CAN EID MCCONF."""
         self.status_update.emit(
             f"  {label}: Kp={pid.kp:.6f} Ki={pid.ki:.6f} Kd={pid.kd:.6f} "
             f"Kd_flt={pid.kd_filter:.4f} Ramp={pid.ramp_erpms_s:.0f}"
@@ -352,7 +349,7 @@ class CanSpeedAutoTuner(QThread):
             position_mode=False,
             ramp_erpms_s=pid.ramp_erpms_s,
         )
-        self._serial.send_packet(packet)
+        self._can.send_vesc_to_target(packet)
 
     def _clear_buffers(self):
         self._speed_buf.clear()
