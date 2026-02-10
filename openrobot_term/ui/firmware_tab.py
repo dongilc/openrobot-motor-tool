@@ -2,6 +2,7 @@
 Firmware upload tab — CAN-only via PCAN-USB EID multi-frame protocol.
 """
 
+import sys
 import threading
 import time
 from pathlib import Path
@@ -177,8 +178,12 @@ class FirmwareTab(QWidget):
 
     def _set_default_bin_path(self, relative_path: str):
         """Set bin_edit to the default path relative to the tool's root directory."""
-        tool_dir = Path(__file__).resolve().parent.parent.parent
-        default = tool_dir / relative_path
+        if getattr(sys, 'frozen', False):
+            # PyInstaller exe: bundled data extracted to _MEIPASS
+            base_dir = Path(sys._MEIPASS)
+        else:
+            base_dir = Path(__file__).resolve().parent.parent.parent
+        default = base_dir / relative_path
         self.bin_edit.setText(str(default))
 
     def on_browse(self):

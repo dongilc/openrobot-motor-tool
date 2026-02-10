@@ -101,7 +101,7 @@ class MainWindow(QMainWindow):
             | QDockWidget.DockWidgetFeature.DockWidgetFloatable
         )
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.terminal_dock)
-        self.resizeDocks([self.terminal_dock], [400], Qt.Orientation.Vertical)
+        self.resizeDocks([self.terminal_dock], [250], Qt.Orientation.Vertical)
         self.resizeDocks([self.motor_dock], [340], Qt.Orientation.Horizontal)
 
         # Wire parameter tab log messages to terminal
