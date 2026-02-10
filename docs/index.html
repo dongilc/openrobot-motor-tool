@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenRobot Motor CAN Protocol — OpenRobot MC v10</title>
+<style>
+  :root {
+    --primary: #1a5276;
+    --primary-light: #2980b9;
+    --accent: #e74c3c;
+    --bg: #ffffff;
+    --bg-alt: #f8f9fa;
+    --border: #dee2e6;
+    --text: #2c3e50;
+    --text-light: #6c757d;
+    --code-bg: #eef1f5;
+    --warning-bg: #fff3cd;
+    --warning-border: #ffc107;
+    --new-bg: #d4edda;
+    --new-border: #28a745;
+    --info-bg: #d1ecf1;
+    --info-border: #17a2b8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text);
+    line-height: 1.6;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 40px 30px;
+    background: var(--bg);
+  }
+
+  /* Header */
+  .doc-header {
+    border-bottom: 3px solid var(--primary);
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+  }
+  .doc-header h1 {
+    font-size: 28px;
+    color: var(--primary);
+    margin-bottom: 4px;
+  }
+  .doc-header .subtitle {
+    font-size: 14px;
+    color: var(--text-light);
+  }
+  .doc-header .version-info {
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--text-light);
+    background: var(--bg-alt);
+    padding: 8px 14px;
+    border-radius: 4px;
+    border-left: 3px solid var(--primary-light);
+  }
+
+  /* Sections */
+  h2 {
+    font-size: 22px;
+    color: var(--primary);
+    margin-top: 40px;
+    margin-bottom: 16px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid var(--primary-light);
+  }
+  h3 {
+    font-size: 17px;
+    color: var(--primary);
+    margin-top: 28px;
+    margin-bottom: 10px;
+  }
+  h3 .cmd-id {
+    display: inline-block;
+    background: var(--primary);
+    color: #fff;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 15px;
+    margin-right: 6px;
+  }
+  h3 .new-badge {
+    display: inline-block;
+    background: var(--new-border);
+    color: #fff;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    vertical-align: middle;
+    margin-left: 6px;
+  }
+  h4 {
+    font-size: 15px;
+    color: var(--primary);
+    margin-top: 20px;
+    margin-bottom: 8px;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0 16px;
+    font-size: 14px;
+  }
+  th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid var(--border);
+  }
+  th {
+    background: var(--primary);
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  tr:nth-child(even) { background: var(--bg-alt); }
+  tr:hover { background: #e8f0fe; }
+
+  /* Summary table special styling */
+  .summary-table tr.new-row { background: var(--new-bg); font-weight: 600; }
+  .summary-table tr.new-row:hover { background: #b8e6c4; }
+  .summary-table .type-read { color: #2980b9; font-weight: 600; }
+  .summary-table .type-write { color: #e67e22; font-weight: 600; }
+  .summary-table .type-control { color: #27ae60; font-weight: 600; }
+
+  /* Code */
+  code {
+    font-family: 'Consolas', 'Courier New', monospace;
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+    color: #c0392b;
+  }
+  .tx-frame {
+    display: block;
+    background: var(--code-bg);
+    padding: 10px 16px;
+    border-radius: 4px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    margin: 8px 0;
+    border-left: 3px solid var(--primary-light);
+    overflow-x: auto;
+  }
+  .tx-label {
+    font-weight: 700;
+    color: var(--primary);
+    margin-right: 4px;
+  }
+
+  /* Descriptions */
+  p { margin: 6px 0; font-size: 14px; }
+  .cmd-desc {
+    color: var(--text-light);
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+
+  /* Warning box */
+  .warning {
+    background: var(--warning-bg);
+    border: 1px solid var(--warning-border);
+    border-left: 4px solid var(--warning-border);
+    padding: 10px 16px;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-size: 13px;
+  }
+  .warning::before {
+    content: "\26A0\FE0F";
+    margin-right: 6px;
+  }
+
+  /* Info box */
+  .info {
+    background: var(--info-bg);
+    border: 1px solid var(--info-border);
+    border-left: 4px solid var(--info-border);
+    padding: 10px 16px;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-size: 13px;
+  }
+
+  /* New feature box */
+  .new-box {
+    background: var(--new-bg);
+    border: 1px solid var(--new-border);
+    border-left: 4px solid var(--new-border);
+    padding: 10px 16px;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-size: 13px;
+  }
+
+  /* Note box (Korean explanations) */
+  .note-box {
+    background: #f0f4ff;
+    border: 1px solid #b8c9e8;
+    border-left: 4px solid #5b7db1;
+    padding: 10px 16px;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .note-box .note-title {
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 4px;
+  }
+
+  /* Separator */
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 24px 0;
+  }
+
+  /* Fault code table */
+  .fault-table td:first-child {
+    text-align: center;
+    font-family: 'Consolas', monospace;
+    font-weight: 600;
+    width: 60px;
+  }
+
+  /* Terminal command block */
+  .terminal {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 14px 18px;
+    border-radius: 6px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    margin: 10px 0;
+    overflow-x: auto;
+  }
+  .terminal .prompt { color: #6a9955; }
+  .terminal .comment { color: #6a9955; }
+
+  /* Control formula */
+  .formula {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 4px;
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    margin: 8px 0;
+    text-align: center;
+  }
+
+  /* Change log */
+  .changelog {
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .changelog h4 {
+    color: var(--primary);
+    font-size: 14px;
+    margin-top: 14px;
+    margin-bottom: 4px;
+  }
+  .changelog ul { margin-left: 20px; margin-bottom: 8px; }
+  .changelog li { margin-bottom: 2px; }
+  .changelog .important {
+    background: #ffeaa7;
+    padding: 6px 12px;
+    border-radius: 4px;
+    margin: 6px 0;
+    font-weight: 600;
+  }
+
+  /* Revision history */
+  .revision-table td:first-child {
+    font-weight: 700;
+    color: var(--primary);
+    white-space: nowrap;
+  }
+  .revision-table td:nth-child(2) { white-space: nowrap; }
+
+  /* Footer */
+  .doc-footer {
+    margin-top: 50px;
+    padding-top: 16px;
+    border-top: 2px solid var(--border);
+    font-size: 12px;
+    color: var(--text-light);
+    text-align: center;
+  }
+
+  /* General info table */
+  .general-table th { width: 160px; }
+  .general-table td code { font-size: 14px; }
+
+  /* Setup steps */
+  .setup-steps { font-size: 14px; line-height: 1.8; }
+  .setup-steps ol { margin-left: 20px; }
+  .setup-steps li { margin-bottom: 6px; }
+
+  /* Print styles */
+  @media print {
+    body { padding: 20px; max-width: 100%; }
+    h2, h3 { page-break-after: avoid; }
+    table { page-break-inside: avoid; }
+    .warning, .info, .new-box, .note-box { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- HEADER -->
+<!-- ============================================================ -->
+<div class="doc-header">
+  <h1>OpenRobot Motor CAN Protocol</h1>
+  <div class="subtitle">OpenRobot MC Custom Firmware &mdash; CAN Communication Specification</div>
+  <div class="version-info">
+    <strong>Version 10</strong> &mdash; 2026-02-11 &nbsp;|&nbsp; by Dongil Choi, Hur Seongyoung
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- CHANGE LOGS -->
+<!-- ============================================================ -->
+<h2>Change Logs</h2>
+
+<div class="changelog">
+  <h4>24-11-13</h4>
+  <ul>
+    <li>encoder offset 반영 (원점 세팅에 유리하게)</li>
+    <li>torque control에 damping 기능 추가</li>
+    <li>fault code 읽을 수 있게 함</li>
+  </ul>
+
+  <h4>24-11-18</h4>
+  <ul>
+    <li>current limit 값 읽고 수정할 수 있게 함</li>
+    <li>fault code를 7개까지 읽을 수 있게 함 (최근 7개)</li>
+    <li>(TODO) RMD-x6-s2 에서 Motor Curr. Max 값이 대게 20A이하로 설정되어 있는데 이것을 50A이상 설정하면 위치제어시 진동발생(토크제어는 영향 없음) — 현재는 Motor Curr. Max 값을 자동 설정된 값 이상으로 바꾸는 것은 비추천</li>
+  </ul>
+
+  <h4>24-12-12 (서울과기대, 국민대 방문, 요구사항 수렴)</h4>
+  <ul>
+    <li>fault code시 해당 모터 정지하고, 전체 스탑은 상위컴에서 제어 (서울과기대 요청) &mdash; TODO</li>
+    <li>CAN으로 펌웨어 업데이트 한번에 가능하게 (서울과기대, 국민대 요청) &mdash; TODO</li>
+    <li>토크전류 리밋 CAN으로 설정 (국민대 요청) &mdash; 해결함 (Write Max Current to ROM)</li>
+    <li>모터튜닝파라미터 CAN으로 설정 (국민대 요청) &mdash; TODO</li>
+  </ul>
+
+  <h4>25-01-14</h4>
+  <ul>
+    <li>fault code시 해당 모터 정지하고, 전체 스탑은 상위컴에서 제어 (서울과기대 요청) &mdash; TODO</li>
+    <li>CAN으로 펌웨어 업데이트 한번에 가능하게 (서울과기대, 국민대 요청) &mdash; 적용완료</li>
+    <li>토크전류 리밋 CAN으로 설정 (국민대 요청) &mdash; 적용완료 (Write Max Current to ROM)</li>
+    <li>모터튜닝파라미터 CAN으로 설정 (국민대 요청) &mdash; 적용완료 (VESC-Tool에서 CAN Forward 기능사용)</li>
+    <li>토크제어시 Damping 제어기능 수정보완 완료</li>
+  </ul>
+
+  <div class="important">변경사항: MOTOR_OFF, MOTOR_STOP, MOTOR_START, TORQUE_CLOSED_LOOP, SPEED_CLOSED_LOOP, POSITION_CLOSED_LOOP, SET_MULTITURN_POSITION 제어 모두 한번 명령을 전달하면 그 값이 유지되는 것으로 바꿈. 기존엔 몇몇 제어는 반복적으로 명령을 보내줘야만 제어가 유지되던 것을 일괄적으로 1회 전달된 명령이 유지되는 것으로 바꾸었음.</div>
+
+  <h4>25-05-15</h4>
+  <ul>
+    <li>Set multiturn pos 를 이용한 위치제어가 offset error 가 해결될 수 없는 구조로 되어 있음을 발견, 이를 해결하기위해 Position closed-loop1 을 multiturn 방식으로 바꾸고, dps_limit 없이 직접 PID 제어되도록 수정함. &rarr; PID 제어시에는 Position closed-loop1 을 사용하기를 추천함</li>
+  </ul>
+
+  <h4>26-02-09 (v9)</h4>
+  <ul>
+    <li><code>0x9C</code> (Read Motor Status 2) 추가 &mdash; 모터 동작에 영향 없는 상태 읽기 전용 명령. 실시간 모니터링/데이터 로깅용.</li>
+    <li><code>0x9D</code> (Read Motor Status 3) 추가 &mdash; Control Mode + Phase A/B/C 전류 읽기. Inverse Clarke 변환으로 상전류 계산.</li>
+    <li><code>or_limit</code> 안전 리미터 추가 &mdash; 0xA3 대용량 위치 스텝시 과전류 보호 (REDIRECT / RAMP 두 가지 모드)</li>
+    <li>Encoder 14-bit 정규화 &mdash; MT6835 (21-bit) 엔코더를 14-bit (0&ndash;16383) 범위로 정규화. CNT2DEG = 360/16384.</li>
+    <li><code>0xA2</code> Speed Closed-Loop에 <strong>speed_mode</strong> 추가 (DATA[1]) &mdash; DPS 제어(mode=0, 기존)와 eRPM 제어(mode=1, VESC 내장 PID) 두 가지 속도제어 모드 선택 가능. 기존 DATA[1]=0x00으로 전송하던 코드는 변경 없이 DPS 모드로 동작 (하위 호환).</li>
+  </ul>
+
+  <h4>26-02-11 (v10)</h4>
+  <ul>
+    <li><strong>VESC EID Protocol 섹션 추가</strong> &mdash; CAN Extended ID를 통한 VESC 명령 프로토콜 (MCCONF 읽기/쓰기, 리부트, 펌웨어 업로드) 문서화</li>
+    <li><strong>Encoder native resolution</strong> &mdash; AS5047 (14-bit, 16384 CPR) / MT6835 (21-bit, 2097152 CPR) 네이티브 해상도 지원. CAN SID 프레임에서는 14-bit로 정규화하여 전송 (하위 호환). <code>uint64_t</code> 캐스트로 오버플로 방지.</li>
+    <li><strong>COMM_REBOOT 버그 수정</strong> &mdash; IWDG 리셋 후 CAN 초기화 전 fault broadcast로 인한 HardFault 수정. <code>comm_can_is_ready()</code> 가드 추가.</li>
+    <li><strong>CAN 펌웨어/부트로더 업로드</strong> &mdash; VESC EID를 통한 펌웨어 및 부트로더 바이너리 업로드 지원</li>
+    <li><strong>Position/Speed PID via MCCONF</strong> &mdash; VESC EID로 Position PID (Kp/Ki/Kd/Kd Filter) 및 Speed PID (Kp/Ki/Kd/Kd Filter/Ramp) 직접 읽기/쓰기</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<!-- GENERAL -->
+<!-- ============================================================ -->
+<h2>General <span class="new-badge">NEW in v9</span></h2>
+
+<table class="general-table">
+  <tr><th>Item</th><th>Value</th></tr>
+  <tr><td>CAN ID</td><td><code>0x140 + Motor_ID</code></td></tr>
+  <tr><td>Frame Type</td><td>Standard (SID)</td></tr>
+  <tr><td>DLC</td><td>8 bytes (fixed)</td></tr>
+  <tr><td>Byte Order</td><td>Little-Endian</td></tr>
+</table>
+
+<h3>Motor Status Response Format <span class="new-badge">NEW in v9</span></h3>
+<p class="cmd-desc">공통 응답 포맷 &mdash; <code>0xA1</code>~<code>0xA4</code>, <code>0x9C</code> 명령에 공통 적용</p>
+
+<table>
+  <tr>
+    <th>Byte</th><th>Field</th><th>Type</th><th>Unit</th><th>Note</th>
+  </tr>
+  <tr><td><code>DATA[0]</code></td><td>Command ID</td><td>uint8</td><td>&mdash;</td><td>Echo</td></tr>
+  <tr><td><code>DATA[1]</code></td><td>Motor Temperature</td><td>int8</td><td>1 &deg;C / LSB</td><td></td></tr>
+  <tr><td><code>DATA[2-3]</code></td><td>Torque Current (Iq)</td><td>int16</td><td>&minus;2048~2048 = &minus;33A~33A</td><td></td></tr>
+  <tr><td><code>DATA[4-5]</code></td><td>Motor Speed</td><td>int16</td><td>1 dps / LSB</td><td></td></tr>
+  <tr><td><code>DATA[6-7]</code></td><td>Encoder Position</td><td>uint16</td><td>14-bit, offset applied</td><td>CNT2DEG = 360/16384</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<!-- TX/RX SUMMARY -->
+<!-- ============================================================ -->
+<h2>TX CAN Protocols Summary</h2>
+<p class="cmd-desc">Command Message for controller (Message ID = 0x140 + Motor ID)</p>
+
+<table style="font-size: 12px;">
+  <tr>
+    <th>Description</th><th>DATA[0]</th><th>DATA[1]</th><th>DATA[2]</th><th>DATA[3]</th><th>DATA[4]</th><th>DATA[5]</th><th>DATA[6]</th><th>DATA[7]</th>
+  </tr>
+  <tr><td>Read PID data</td><td>0x30</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td>Write PID to ROM</td><td>0x32</td><td>NULL</td><td colspan="2">Position loop Kp</td><td colspan="2">Position loop Ki</td><td colspan="2">Position loop Kd</td></tr>
+  <tr><td>Read encoder data</td><td>0x90</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td>Write encoder offset</td><td>0x91</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="2">Encoder offset</td></tr>
+  <tr><td>Write current pos as zero</td><td>0x19</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td>Read multi turns angle</td><td>0x92</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr class="new-row"><td><strong>Read Motor Status 2</strong></td><td>0x9C</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr class="new-row"><td><strong>Read Motor Status 3</strong></td><td>0x9D</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td>Motor off</td><td>0x80</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td>Motor stop</td><td>0x81</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td>Motor running</td><td>0x88</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td>Torque closed-loop</td><td>0xA1</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="2">Torque current ctrl</td><td colspan="2">Damping Const</td></tr>
+  <tr><td>Speed closed-loop</td><td>0xA2</td><td><strong>speed_mode</strong></td><td>NULL</td><td>NULL</td><td colspan="4">speed control (int32)</td></tr>
+  <tr><td>Position closed-loop 1</td><td>0xA3</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="4">Position control (int32)</td></tr>
+  <tr><td>Set Multiturn position</td><td>0xA4</td><td>NULL</td><td colspan="2">Speed limit</td><td colspan="4">Position control (int32)</td></tr>
+  <tr><td>Read Fault Code</td><td>0xB0</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td>Read Max Current</td><td>0xB1</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td>Write Max Current to ROM</td><td>0xB2</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
+</table>
+
+<h2>RX CAN Protocols Summary</h2>
+
+<table style="font-size: 12px;">
+  <tr>
+    <th>Description</th><th>DATA[0]</th><th>DATA[1]</th><th>DATA[2]</th><th>DATA[3]</th><th>DATA[4]</th><th>DATA[5]</th><th>DATA[6]</th><th>DATA[7]</th>
+  </tr>
+  <tr><td>Read PID data</td><td>0x30</td><td>0x00</td><td colspan="2">Position loop Kp</td><td colspan="2">Position loop Ki</td><td colspan="2">Position loop Kd</td></tr>
+  <tr><td>Write PID to ROM</td><td>0x32</td><td>0x00</td><td colspan="2">Position loop Kp</td><td colspan="2">Position loop Ki</td><td colspan="2">Position loop Kd</td></tr>
+  <tr><td>Read encoder data</td><td>0x90</td><td>Motor_temp</td><td colspan="2">Encoder position</td><td colspan="2">Encoder original</td><td colspan="2">Encoder offset</td></tr>
+  <tr><td>Write encoder offset</td><td>0x91</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td colspan="2">Encoder offset</td></tr>
+  <tr><td>Write current pos as zero</td><td>0x19</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td colspan="2">Encoder offset</td></tr>
+  <tr><td>Read multi turns angle</td><td>0x92</td><td colspan="7">Multi-turn Angle (7 bytes LE)</td></tr>
+  <tr class="new-row"><td><strong>Read Motor Status 2</strong></td><td>0x9C</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
+  <tr class="new-row"><td><strong>Read Motor Status 3</strong></td><td>0x9D</td><td>Control Mode</td><td colspan="2">Phase A Curr</td><td colspan="2">Phase B Curr</td><td colspan="2">Phase C Curr</td></tr>
+  <tr><td>Motor off</td><td>0x80</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
+  <tr><td>Motor stop</td><td>0x81</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
+  <tr><td>Motor running</td><td>0x88</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
+  <tr><td>Torque closed-loop</td><td>0xA1</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
+  <tr><td>Speed closed-loop</td><td>0xA2</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
+  <tr><td>Position closed-loop 1</td><td>0xA3</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
+  <tr><td>Set Multiturn position</td><td>0xA4</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
+  <tr><td>Read Fault Code</td><td>0xB0</td><td>Code1</td><td>Code2</td><td>Code3</td><td>Code4</td><td>Code5</td><td>Code6</td><td>Code7</td></tr>
+  <tr><td>Read Max Current</td><td>0xB1</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
+  <tr><td>Write Max Current to ROM</td><td>0xB2</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<!-- COMMAND SUMMARY -->
+<!-- ============================================================ -->
+<h2>Command Summary <span class="new-badge">NEW in v9</span></h2>
+
+<table class="summary-table">
+  <tr>
+    <th>ID</th><th>Command</th><th>Type</th><th>Returns Status?</th>
+  </tr>
+  <tr><td><code>0x30</code></td><td>Read PID Data</td><td class="type-read">Read</td><td>No (PID gains)</td></tr>
+  <tr><td><code>0x32</code></td><td>Write PID to ROM</td><td class="type-write">Write</td><td>No (echo)</td></tr>
+  <tr><td><code>0x90</code></td><td>Read Encoder Data</td><td class="type-read">Read</td><td>No (encoder only)</td></tr>
+  <tr><td><code>0x91</code></td><td>Write Encoder Offset</td><td class="type-write">Write</td><td>No (echo)</td></tr>
+  <tr><td><code>0x19</code></td><td>Write Current Pos as Zero</td><td class="type-write">Write</td><td>No (offset)</td></tr>
+  <tr><td><code>0x92</code></td><td>Read Multi-Turn Angle</td><td class="type-read">Read</td><td>No (angle only)</td></tr>
+  <tr class="new-row"><td><code>0x9C</code></td><td>Read Motor Status 2 &nbsp;<span style="color:#28a745; font-size:11px;">NEW</span></td><td class="type-read">Read</td><td><strong>Yes</strong></td></tr>
+  <tr class="new-row"><td><code>0x9D</code></td><td>Read Motor Status 3 &nbsp;<span style="color:#28a745; font-size:11px;">NEW</span></td><td class="type-read">Read</td><td><strong>Yes (phase currents)</strong></td></tr>
+  <tr><td><code>0x80</code></td><td>Motor Off</td><td class="type-control">Control</td><td>No (ACK)</td></tr>
+  <tr><td><code>0x81</code></td><td>Motor Stop</td><td class="type-control">Control</td><td>No (ACK)</td></tr>
+  <tr><td><code>0x88</code></td><td>Motor Running (Start)</td><td class="type-control">Control</td><td>No (ACK)</td></tr>
+  <tr><td><code>0xA1</code></td><td>Torque Closed-Loop</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
+  <tr><td><code>0xA2</code></td><td>Speed Closed-Loop</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
+  <tr><td><code>0xA3</code></td><td>Position Closed-Loop 1</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
+  <tr><td><code>0xA4</code></td><td>Set Multiturn Position</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
+  <tr><td><code>0xB0</code></td><td>Read Fault Code</td><td class="type-read">Read</td><td>No (fault codes)</td></tr>
+  <tr><td><code>0xB1</code></td><td>Read Max Current</td><td class="type-read">Read</td><td>No (current limits)</td></tr>
+  <tr><td><code>0xB2</code></td><td>Write Max Current to ROM</td><td class="type-write">Write</td><td>No (echo)</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<!-- COMMAND DETAILS -->
+<!-- ============================================================ -->
+<h2>Command Details</h2>
+
+<!-- 0x30 -->
+<hr>
+<h3><span class="cmd-id">0x30</span> Read PID Data</h3>
+<p class="cmd-desc">Read position PID gains.</p>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+
+<p><strong>RX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Scale</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0x30</td><td>uint8</td><td>&mdash;</td></tr>
+  <tr><td><code>DATA[1]</code></td><td>0x00</td><td>&mdash;</td><td>&mdash;</td></tr>
+  <tr><td><code>DATA[2-3]</code></td><td>Kp</td><td>int16</td><td>&times;1000 (0.001/LSB)</td></tr>
+  <tr><td><code>DATA[4-5]</code></td><td>Ki</td><td>int16</td><td>&times;100000 (0.00001/LSB)</td></tr>
+  <tr><td><code>DATA[6-7]</code></td><td>Kd</td><td>int16</td><td>&times;100000 (0.00001/LSB)</td></tr>
+</table>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  모터 Position Control 시 사용하는 PID Gain 값으로 RMD x6-s2(36:1) 모터의 Default 값은 아래와 같다.<br>
+  Kp = 0.02 &nbsp;|&nbsp; Ki = 0.0002 &nbsp;|&nbsp; Kd = 0.0002
+</div>
+
+<!-- 0x32 -->
+<hr>
+<h3><span class="cmd-id">0x32</span> Write PID to ROM</h3>
+<p class="cmd-desc">Write position PID gains to EEPROM (persistent).</p>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0x32, 0x00, Kp_lo, Kp_hi, Ki_lo, Ki_hi, Kd_lo, Kd_hi]</div>
+
+<p><strong>RX:</strong> Echo of TX</p>
+<div class="warning">Do NOT send faster than 100Hz (EEPROM write latency).</div>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  모터 Position Control 시 사용하는 PID Gain 값을 모터제어기 Microprocessor의 EEPROM에 저장한다. 저장된 값은 전원이 꺼진 이후에도 사라지지 않고 유지된다. 다만, Firmware를 VESC-Tool로 업데이트한 경우 EEPROM 값이 초기화된다.<br>
+  <strong>주의:</strong> EEPROM의 경우, 저장하는데 소요되는 시간이 있어 본 명령을 100Hz 이상 빠르게 반복해서 보내는 것은 지양해야 한다.
+</div>
+
+<!-- 0x90 -->
+<hr>
+<h3><span class="cmd-id">0x90</span> Read Encoder Data</h3>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0x90, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+
+<p><strong>RX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0x90</td><td>uint8</td><td>&mdash;</td></tr>
+  <tr><td><code>DATA[1]</code></td><td>Motor Temp</td><td>int8</td><td>1 &deg;C / LSB</td></tr>
+  <tr><td><code>DATA[2-3]</code></td><td>Encoder Position</td><td>uint16</td><td>original &minus; offset</td></tr>
+  <tr><td><code>DATA[4-5]</code></td><td>Encoder Original</td><td>uint16</td><td>raw (0&ndash;360&deg;)</td></tr>
+  <tr><td><code>DATA[6-7]</code></td><td>Encoder Offset</td><td>uint16</td><td></td></tr>
+</table>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  모터 엔코더 데이터로 Magnetic 엔코더의 결과값에 해당한다. Magnetic 엔코더의 특성상 Encoder original position 값은 0~360도 값이 출력된다. Encoder offset 값은 사용자가 지정한 offset값으로 0~360도 값에 해당한다. Encoder Position 값은 Encoder original position에서 Encoder offset 값을 뺀 값이다.<br><br>
+  <strong>예시:</strong> Encoder offset = 100도이고 Encoder original position이 260도이면 Encoder position은 160도가 출력된다. 이 경우, Encoder original position이 0~360도 범위에서 값을 가지고 Encoder offset = 100도 이기 때문에 Encoder position 값은 -100~260도 범위를 가짐을 유념해야한다.
+</div>
+
+<!-- 0x91 -->
+<hr>
+<h3><span class="cmd-id">0x91</span> Write Encoder Offset</h3>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0x91, 0x00, 0x00, 0x00, 0x00, 0x00, Offset_lo, Offset_hi]</div>
+
+<p><strong>RX:</strong> Echo of TX</p>
+<div class="warning">Do NOT send faster than 100Hz.</div>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  Encoder offset 값은 사용자가 지정한 offset 값으로 DEG 값으로 0~360 범위에 있고 EEPROM에 저장되며 전원이 나가도 유지된다. VESC-Tool로 펌웨어를 업데이트한 경우 EEPROM이 초기화 된다. 다만, 펌웨어 업데이트를 VESC-Tool이 아닌 ST-Link로 JTAG Port를 통해서 하면 EEPROM 값이 유지된다.<br>
+  <strong>주의:</strong> EEPROM의 경우, 저장하는데 소요되는 시간이 있어 본 명령을 100Hz 이상 빠르게 반복해서 보내는 것은 지양해야 한다.
+</div>
+
+<!-- 0x19 -->
+<hr>
+<h3><span class="cmd-id">0x19</span> Write Current Position to ROM as Motor Zero</h3>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0x19, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+<div class="tx-frame"><span class="tx-label">RX:</span> [0x19, 0x00, 0x00, 0x00, 0x00, 0x00, Offset_lo, Offset_hi]</div>
+
+<div class="warning">Do NOT send faster than 100Hz.</div>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  Encoder offset 값을 지정하여 EEPROM에 저장시킨다. 로봇을 정해진 원점에 위치시키고 본 명령어를 이용하여 그 위치를 Offset으로 지정시키면 Encoder position과 Multi-turn Angle이 그 위치에서 0도가 된다. 본 값은 전원이 꺼진 이후에도 유지되며 단, VESC-Tool을 이용한 펌웨어 업데이트를 하면 초기화된다.<br>
+  <strong>주의:</strong> EEPROM의 경우, 저장하는데 소요되는 시간이 있어 본 명령을 100Hz 이상 빠르게 반복해서 보내는 것은 지양해야 한다.
+</div>
+
+<!-- 0x92 -->
+<hr>
+<h3><span class="cmd-id">0x92</span> Read Multi-Turn Angle</h3>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0x92, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+
+<p><strong>RX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0x92</td><td>uint8</td><td>&mdash;</td></tr>
+  <tr><td><code>DATA[1-7]</code></td><td>Motor Angle</td><td>int64 (7 bytes LE)</td><td>0.01 deg/LSB, cumulative</td></tr>
+</table>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  Encoder 값을 누적시켜 Multi-turn Angle 값을 DEG 값으로 출력한다. 본 값은 Encoder offset 값을 적용하여 계산되며 전원이 꺼진 이후에도 저장된다. 단, VESC-Tool을 이용한 펌웨어 업데이트시 초기화 된다.
+</div>
+
+<!-- 0x9C NEW -->
+<hr>
+<h3><span class="cmd-id">0x9C</span> Read Motor Status 2 <span class="new-badge">NEW in v9</span></h3>
+<p class="cmd-desc">Read-only status query. Returns same motor status format as 0xA1~0xA4 without commanding any motion. Safe for continuous polling.</p>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0x9C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+
+<p><strong>RX:</strong> Standard Motor Status Response format</p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Unit</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0x9C</td><td>uint8</td><td>&mdash;</td><td>Echo</td></tr>
+  <tr><td><code>DATA[1]</code></td><td>Motor Temperature</td><td>int8</td><td>1 &deg;C / LSB</td><td></td></tr>
+  <tr><td><code>DATA[2-3]</code></td><td>Torque Current (Iq)</td><td>int16</td><td>&minus;2048~2048 = &minus;33A~33A</td><td></td></tr>
+  <tr><td><code>DATA[4-5]</code></td><td>Motor Speed</td><td>int16</td><td>1 dps / LSB</td><td></td></tr>
+  <tr><td><code>DATA[6-7]</code></td><td>Encoder Position</td><td>uint16</td><td>14-bit, offset applied</td><td>CNT2DEG = 360/16384</td></tr>
+</table>
+
+<div class="new-box">
+  <strong>Use case:</strong> Real-time monitoring, data logging, graph plotting. Can be sent at high rates (up to 1 kHz) without affecting motor operation.
+</div>
+
+<!-- 0x9D NEW -->
+<hr>
+<h3><span class="cmd-id">0x9D</span> Read Motor Status 3 <span class="new-badge">NEW in v9</span></h3>
+<p class="cmd-desc">Read-only status query returning <strong>control mode</strong> and <strong>phase currents</strong> (A/B/C).
+Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (originally NULL).</p>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0x9D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+
+<p><strong>RX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Unit</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0x9D</td><td>uint8</td><td>&mdash;</td><td>Echo</td></tr>
+  <tr style="background: var(--new-bg);"><td><code>DATA[1]</code></td><td><strong>Control Mode</strong></td><td>uint8</td><td>enum</td><td>See table below</td></tr>
+  <tr><td><code>DATA[2-3]</code></td><td>Phase A Current</td><td>int16</td><td>1A / 64 LSB</td><td>iA = i_alpha</td></tr>
+  <tr><td><code>DATA[4-5]</code></td><td>Phase B Current</td><td>int16</td><td>1A / 64 LSB</td><td>iB = &minus;0.5&middot;i_alpha + &radic;3/2&middot;i_beta</td></tr>
+  <tr><td><code>DATA[6-7]</code></td><td>Phase C Current</td><td>int16</td><td>1A / 64 LSB</td><td>iC = &minus;(iA + iB)</td></tr>
+</table>
+
+<p style="margin-top: 12px;"><strong>Control Mode Values:</strong></p>
+<table>
+  <tr><th style="width:60px;">Value</th><th style="width:200px;">Mode</th><th>CAN Command Origin</th></tr>
+  <tr><td>0</td><td>NONE_CONTROL</td><td>Initial state</td></tr>
+  <tr><td>1</td><td>MOTOR_RELEASE</td><td>0x80 Motor Off</td></tr>
+  <tr><td>2</td><td>CURRENT_BRAKE</td><td>Current brake</td></tr>
+  <tr><td>3</td><td>DUTY_CONTROL</td><td>0x88 Motor Start</td></tr>
+  <tr><td>4</td><td>CURRENT_CONTROL</td><td>0xA1 Torque</td></tr>
+  <tr><td>5</td><td>DAMPED_CURRENT_CONTROL</td><td>0xA1 w/ damping_kd</td></tr>
+  <tr style="background: #dbeafe;"><td><strong>7</strong></td><td><strong>POSITION_CONTROL_ACCUM</strong></td><td><strong>0xA3 Direct PID</strong></td></tr>
+  <tr><td>8</td><td>DPS_CONTROL_TIMEOUT</td><td>Speed timeout</td></tr>
+  <tr><td>9</td><td>DPS_CONTROL_DURATION</td><td>0xA2 Speed (mode=0) / 0x81 Stop</td></tr>
+  <tr style="background: #dbeafe;"><td><strong>10</strong></td><td><strong>SERVO_CONTROL</strong></td><td><strong>0xA4 / or_limit redirect</strong></td></tr>
+  <tr><td>11</td><td>TRAJ_CONTROL</td><td>Trajectory</td></tr>
+</table>
+
+<div class="new-box">
+  <strong>Use case:</strong> Control mode monitoring (or_limit mode transitions, Direct PID &harr; Servo),
+  phase current analysis. Polled alongside 0x9C for combined status + phase data.
+  or_limit redirect visible as 10&rarr;7 (SERVO&rarr;Direct PID) transition on control mode graph.
+</div>
+
+<!-- 0x80 -->
+<hr>
+<h3><span class="cmd-id">0x80</span> Motor Off</h3>
+<p class="cmd-desc">Turns off motor output, clears operating state and accumulated position.</p>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+<p><strong>RX:</strong> Echo (all zeros)</p>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  모터제어를 위한 모든 명령을 OFF 상태로 만든다. 모터를 Free 한 상태로 Release 한다.
+</div>
+
+<!-- 0x81 -->
+<hr>
+<h3><span class="cmd-id">0x81</span> Motor Stop</h3>
+<p class="cmd-desc">Stops motor (speed = 0) but retains operating state. Can be resumed.</p>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0x81, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+<p><strong>RX:</strong> Echo (all zeros)</p>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  모터를 SPEED = 0 상태로 제어하여 모터가 멈추도록 한다. 단, 이는 위치제어가 아닌 속도제어를 이용하기 때문에 외력이 크게 가해지면 자기 위치를 유지하지 않고 damping이 큰 상태로 천천히 움직일 수 있다. 그러므로 만약, 모터의 완전한 Position Lock을 하기 원한다면 SET Multiturn POS를 이용해야 한다.
+</div>
+
+<!-- 0x88 -->
+<hr>
+<h3><span class="cmd-id">0x88</span> Motor Running (Start)</h3>
+<p class="cmd-desc">Resume from stop state. Sets duty = 0 (brake mode).</p>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0x88, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+<p><strong>RX:</strong> Echo (all zeros)</p>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  모터를 Duty = 0 상태로 만든다. Duty = 0 상태는 약간의 Damping 이 들어간 상태로 생각하면 된다. RMD 제어 프로토콜을 따라서 만들기는 했으나, OpenRobot MC 제어기에서는 그다지 쓰임새가 없는 제어상태라고 볼 수 있다. 일종의 Brake 상태라고 볼 수는 있다.
+</div>
+
+<!-- 0xA1 -->
+<hr>
+<h3><span class="cmd-id">0xA1</span> Torque Closed-Loop</h3>
+
+<p><strong>TX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0xA1</td><td>uint8</td><td>&mdash;</td></tr>
+  <tr><td><code>DATA[1]</code></td><td>0x00</td><td>&mdash;</td><td>reserved</td></tr>
+  <tr><td><code>DATA[2-3]</code></td><td>0x0000</td><td>&mdash;</td><td>reserved</td></tr>
+  <tr><td><code>DATA[4-5]</code></td><td>iqControl</td><td>int16</td><td>&minus;2048~2048 = &minus;33A~33A</td></tr>
+  <tr><td><code>DATA[6-7]</code></td><td>damping_kd</td><td>int16</td><td>0~100 (100 = max damping)</td></tr>
+</table>
+
+<div class="formula">Current = iqControl + damping_kd &times; motor_speed_rps</div>
+
+<p><strong>RX:</strong> Motor Status Response Format</p>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  모터 전류제어 Loop으로 다음 식으로 제어한다.<br>
+  <code>Current = (Torque current control value) + (Damping Constant value) &times; (motor_speed_rps)</code><br><br>
+  Damping 토크 기능을 추가하였으며 Damping의 크기는 Damping Constant(0~100의 값)로 지정하며 100이 가장 Damping이 크다. RMD x6-s2 (36:1) 모터의 경우, 10정도가 Default 값으로 적당했다.<br>
+  <strong>주의:</strong> Return 데이터중 Encoder position은 offset 값이 적용된 값이다.
+</div>
+
+<!-- 0xA2 -->
+<hr>
+<h3><span class="cmd-id">0xA2</span> Speed Closed-Loop <span class="new-badge">UPDATED v9</span></h3>
+<p class="cmd-desc">Supports two speed control modes selectable via DATA[1].</p>
+
+<p><strong>TX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0xA2</td><td>uint8</td><td>&mdash;</td></tr>
+  <tr style="background: var(--new-bg);"><td><code>DATA[1]</code></td><td><strong>speed_mode</strong></td><td>uint8</td><td>0 = DPS (default), 1 = eRPM</td></tr>
+  <tr><td><code>DATA[2-3]</code></td><td>0x0000</td><td>&mdash;</td><td>reserved</td></tr>
+  <tr><td><code>DATA[4-7]</code></td><td>speedControl</td><td>int32</td><td>mode 0: 0.01 dps/LSB, mode 1: 1 eRPM/LSB</td></tr>
+</table>
+
+<p style="margin-top: 12px;"><strong>speed_mode values:</strong></p>
+<table>
+  <tr><th style="width:60px;">Value</th><th style="width:80px;">Mode</th><th>Control Loop</th><th>Unit</th><th>Description</th></tr>
+  <tr><td>0</td><td>DPS</td><td>OpenRobot custom</td><td>0.01 dps/LSB</td><td>위치제어 기반 사다리꼴 프로파일 속도제어 (기본값)</td></tr>
+  <tr style="background: var(--new-bg);"><td>1</td><td>eRPM</td><td>VESC built-in PID</td><td>1 eRPM/LSB</td><td>VESC 내장 PID 속도제어 루프 (<code>mc_interface_set_pid_speed</code>)</td></tr>
+</table>
+
+<p><strong>RX:</strong> Motor Status Response Format (동일)</p>
+
+<div class="note-box">
+  <div class="note-title">부연설명 &mdash; Mode 0: DPS 제어 (기본값)</div>
+  모터 속도제어 Loop으로 Degree/sec 속도값을 보낸다. 일명 DPS 제어라고 불리는 제어방식을 사용하며 일반적인 속도제어와는 다르게 위치제어를 기반으로 한 속도제어를 수행한다. 이는 위치제어를 하는 과정에서 위치 목표값을 주어진 속도 reference 를 따라갈 수 있도록 사다리꼴 Profile을 이용하여 제어한다.<br><br>
+  기본적으로 위치제어 상태에서 속도를 제어하기 때문에 매우 저속에서부터 고속까지 정확한 속도제어가 가능하다. 다만, 고속의 속도제어의 경우, 위치제어의 PID Gain 값에 따라 제어 안정성 (Overshoot 등)에 차이가 있는데 RMD x6-s2 (36:1) 모터의 경우 0~8000 DPS 값에 대해서는 안정적으로 작동한다.<br>
+  <strong>주의:</strong> 사다리꼴 Profile에서는 가속도값과 최대 속도값을 지정할 수 있는데 이는 펌웨어 상에 일반적으로 적당한 값으로 세팅되어 있으나 모터에 따라 별도의 튜닝이 필요할 수 있다.
+</div>
+
+<div class="note-box">
+  <div class="note-title">부연설명 &mdash; Mode 1: eRPM 제어 (VESC 내장) <span class="new-badge">NEW in v9</span></div>
+  VESC에 기본 탑재된 PID 속도제어 루프를 사용한다. eRPM (electrical RPM) 단위로 속도 명령을 보내며, VESC-Tool의 Speed PID 설정(Kp, Ki, Kd 등)에 의해 제어 성능이 결정된다. DPS 모드와 달리 위치제어 기반이 아닌 순수 속도 PID 제어이므로, 고속 영역에서의 응답 특성이 다르다.<br><br>
+  VESC timeout 메커니즘이 적용되므로 주기적으로 명령을 보내거나, 1회 전송 후 유지되도록 설정해야 한다.
+</div>
+
+<div class="new-box">
+  <strong>하위 호환:</strong> 기존 DATA[1]=0x00으로 전송하던 코드는 변경 없이 DPS 모드(mode=0)로 동작합니다.
+</div>
+
+<!-- 0xA3 -->
+<hr>
+<h3><span class="cmd-id">0xA3</span> Position Closed-Loop 1 <span style="font-size:13px; color:var(--text-light);">(Multi-turn, Direct PID)</span> <span class="new-badge" style="background:#e67e22;">UPDATED v9</span></h3>
+<p class="cmd-desc">Direct position PID control. <strong>No velocity limiting</strong> &mdash; large steps cause full current output immediately.</p>
+
+<p><strong>TX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0xA3</td><td>uint8</td><td>&mdash;</td></tr>
+  <tr><td><code>DATA[1-3]</code></td><td>0x000000</td><td>&mdash;</td><td>reserved</td></tr>
+  <tr><td><code>DATA[4-7]</code></td><td>angleControl</td><td>int32</td><td>0.01 deg / LSB</td></tr>
+</table>
+
+<p><strong>RX:</strong> Motor Status Response Format</p>
+
+<div class="warning">
+  <strong>WARNING <span class="new-badge">NEW in v9</span>:</strong> No velocity ramping. Large position jumps cause instantaneous max current output, which can damage DRV/FET.
+  Use <code>or_limit</code> safety limiter <span class="new-badge">NEW in v9</span> or prefer <code>0xA4</code> for large moves.
+</div>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  Encoder offset를 고려한 위치에 대해 Multi-turn 위치제어를 수행한다. DPS_LIMIT 없이 PID제어가 직접적으로 적용되는 방식임.<br><br>
+  <strong>(v8 변경사항)</strong> Set multiturn pos 를 이용한 위치제어가 offset error 가 해결될 수 없는 구조로 되어 있음을 발견, 이를 해결하기위해 Position closed-loop1 을 multiturn 방식으로 바꾸고, dps_limit 없이 직접 PID 제어되도록 수정함. &rarr; PID 제어시에는 Position closed-loop1 을 사용하기를 추천함.
+</div>
+
+<!-- 0xA4 -->
+<hr>
+<h3><span class="cmd-id">0xA4</span> Set Multiturn Position <span style="font-size:13px; color:var(--text-light);">(DPS-limited)</span></h3>
+<p class="cmd-desc">Position control with velocity limiting via servo controller. Recommended for large position moves.</p>
+
+<p><strong>TX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0xA4</td><td>uint8</td><td>&mdash;</td></tr>
+  <tr><td><code>DATA[1]</code></td><td>0x00</td><td>&mdash;</td><td>reserved</td></tr>
+  <tr><td><code>DATA[2-3]</code></td><td>maxSpeed</td><td>uint16</td><td>1 dps / LSB (1~25000)</td></tr>
+  <tr><td><code>DATA[4-7]</code></td><td>angleControl</td><td>int32</td><td>0.01 deg / LSB</td></tr>
+</table>
+
+<p><strong>RX:</strong> Motor Status Response Format</p>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  Encoder offset를 고려한 위치에 대해 Multi-turn 위치제어를 수행한다. 모터를 초기위치에 놓고 그 위치를 offset 값으로 지정하면 그 위치는 Multi-turn 0도 위치가 된다.<br><br>
+  Multi-turn 위치제어를 하다가 바로 Torque 제어, Speed 제어로 변경이 가능하며 그 반대로 가능하다.<br>
+  <strong>주의:</strong> Multi-turn 위치제어는 한번 명령이 들어가면 위치제어가 계속 유지되며 모터를 풀고자 하면 Motor Off 명령어로 Release를 해야 한다.
+</div>
+
+<!-- 0xB0 -->
+<hr>
+<h3><span class="cmd-id">0xB0</span> Read Fault Code</h3>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0xB0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+
+<p><strong>RX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0xB0</td><td>&mdash;</td></tr>
+  <tr><td><code>DATA[1-7]</code></td><td>Fault codes 1~7</td><td>Oldest to newest</td></tr>
+</table>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  모터제어기 전원인가후 발생한 Fault Code를 최대 7개 값까지 읽을 수 있다. Fault Code 1이 가장 오래된 값이며, Fault Code 7이 가장 최신값이다. 7개 초과된 Fault Code 값은 누락된다.
+</div>
+
+<p style="margin-top:14px;"><strong>Fault Code Table (10진수값):</strong></p>
+<table class="fault-table" style="font-size: 12px;">
+  <tr><th style="width:40px;">Code</th><th>Fault</th><th style="width:40px;">Code</th><th>Fault</th></tr>
+  <tr><td>0</td><td>NONE</td><td>14</td><td>FLASH_CORRUPTION</td></tr>
+  <tr><td>1</td><td>OVER_VOLTAGE</td><td>15</td><td>HIGH_OFFSET_CURRENT_SENSOR_1</td></tr>
+  <tr><td>2</td><td>UNDER_VOLTAGE</td><td>16</td><td>HIGH_OFFSET_CURRENT_SENSOR_2</td></tr>
+  <tr><td>3</td><td>DRV</td><td>17</td><td>HIGH_OFFSET_CURRENT_SENSOR_3</td></tr>
+  <tr><td>4</td><td>ABS_OVER_CURRENT</td><td>18</td><td>UNBALANCED_CURRENTS</td></tr>
+  <tr><td>5</td><td>OVER_TEMP_FET</td><td>19</td><td>BRK</td></tr>
+  <tr><td>6</td><td>OVER_TEMP_MOTOR</td><td>20</td><td>RESOLVER_LOT</td></tr>
+  <tr><td>7</td><td>GATE_DRIVER_OVER_VOLTAGE</td><td>21</td><td>RESOLVER_DOS</td></tr>
+  <tr><td>8</td><td>GATE_DRIVER_UNDER_VOLTAGE</td><td>22</td><td>RESOLVER_LOS</td></tr>
+  <tr><td>9</td><td>MCU_UNDER_VOLTAGE</td><td>23</td><td>FLASH_CORRUPTION_APP_CFG</td></tr>
+  <tr><td>10</td><td>BOOTING_FROM_WATCHDOG_RESET</td><td>24</td><td>FLASH_CORRUPTION_MC_CFG</td></tr>
+  <tr><td>11</td><td>ENCODER_SPI</td><td>25</td><td>ENCODER_NO_MAGNET</td></tr>
+  <tr><td>12</td><td>ENCODER_SINCOS_BELOW_MIN_AMPLITUDE</td><td>26</td><td>ENCODER_MAGNET_TOO_STRONG</td></tr>
+  <tr><td>13</td><td>ENCODER_SINCOS_ABOVE_MAX_AMPLITUDE</td><td></td><td></td></tr>
+</table>
+
+<!-- 0xB1 -->
+<hr>
+<h3><span class="cmd-id">0xB1</span> Read Max Current</h3>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0xB1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+
+<p><strong>RX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0xB1</td><td>uint8</td><td>&mdash;</td></tr>
+  <tr><td><code>DATA[1]</code></td><td>OC_Mode</td><td>uint8</td><td>0=LIMIT, 1=LATCH, 2=REPORT, 3=DISABLED</td></tr>
+  <tr><td><code>DATA[2-3]</code></td><td>Motor Current Max</td><td>int16</td><td>0.01 A / LSB</td></tr>
+  <tr><td><code>DATA[4-5]</code></td><td>Motor Current Abs Max</td><td>int16</td><td>0.01 A / LSB</td></tr>
+  <tr><td><code>DATA[6-7]</code></td><td>Battery Current Max</td><td>int16</td><td>0.01 A / LSB</td></tr>
+</table>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  <strong>1. OC_Mode:</strong> DRV8301칩에서 자체적으로 제공하는 과전류(Over Current) 대처 모드 설정. 기본적으로 이 기능은 전류측정에 부정확하기 때문에 DISABLE(=3)으로 해놓는 것이 좋다.<br>
+  <code>DRV8301_OC_LIMIT = 0, DRV8301_OC_LATCH_SHUTDOWN = 1, DRV8301_OC_REPORT_ONLY = 2, DRV8301_OC_DISABLED = 3</code><br><br>
+  <strong>2. Motor Curr. Max:</strong> 모터 전류제어시 제한되는 전류 최대값 (양수로 설정하며 이값의 음수값이 자동으로 Motor Curr. Max Brake 값이 됨), Limit 역할을 하며 Fault Code가 발생하지는 않음<br><br>
+  <strong>3. Motor Curr. Abs Max:</strong> 모터 전류제어시 절대값으로의 최대값으로 이 값이 넘으면 Fault Code 발생<br><br>
+  <strong>4. Bat Curr. Max:</strong> 배터리에서 방전되는 전류의 최대값. PWM Duty가 100%일 때 Batt Curr. = Motor Curr. 인 상황이 되고, 일반적으로 PWM Duty가 낮으면 실제값은 Batt Curr. &lt; Motor Curr. 가 된다.
+</div>
+
+<!-- 0xB2 -->
+<hr>
+<h3><span class="cmd-id">0xB2</span> Write Max Current to ROM</h3>
+<p class="cmd-desc">Same format as 0xB1 RX (with <code>0xB2</code> as DATA[0]).</p>
+
+<p><strong>TX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0xB2</td><td>uint8</td><td>&mdash;</td></tr>
+  <tr><td><code>DATA[1]</code></td><td>OC_Mode</td><td>uint8</td><td>기본값 3 (DISABLED) 권장</td></tr>
+  <tr><td><code>DATA[2-3]</code></td><td>Motor Current Max</td><td>int16</td><td>0.01 A/LSB (예: 2000 = 20A)</td></tr>
+  <tr><td><code>DATA[4-5]</code></td><td>Motor Current Abs Max</td><td>int16</td><td>0.01 A/LSB (예: 15000 = 150A)</td></tr>
+  <tr><td><code>DATA[6-7]</code></td><td>Battery Current Max</td><td>int16</td><td>0.01 A/LSB (예: 9900 = 99A)</td></tr>
+</table>
+
+<p><strong>RX:</strong> Echo of TX</p>
+<div class="warning">Do NOT send faster than 100Hz.</div>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  <strong>1. OC_Mode:</strong> 기본값으로 이 값을 3으로 해놓는 것이 좋다.<br>
+  <code>DRV8301_OC_LIMIT = 0, DRV8301_OC_LATCH_SHUTDOWN = 1, DRV8301_OC_REPORT_ONLY = 2, DRV8301_OC_DISABLED = 3</code><br><br>
+  <strong>2. Motor Curr. Max:</strong> 모터 전류제어시 제한되는 전류 최대값 (양수로 설정하며 이값의 음수값이 자동으로 Motor Curr. Max Brake 값이 됨)<br><br>
+  <strong>3. Motor Curr. Abs Max:</strong> 모터 전류제어시 절대값으로의 최대값으로 이 값이 넘으면 Fault Code 발생<br><br>
+  <strong>4. Bat Curr. Max:</strong> 배터리에서 방전되는 전류의 최대값. PWM Duty가 100%일 때 Batt Curr. = Motor Curr. 인 상황이 되고, 일반적으로 PWM Duty가 낮으면 실제값은 Batt Curr. &lt; Motor Curr. 가 된다.
+</div>
+
+<!-- ============================================================ -->
+<!-- TERMINAL COMMANDS -->
+<!-- ============================================================ -->
+<h2>Terminal Commands <span class="new-badge">NEW in v9</span></h2>
+
+<h3><code>or_limit</code> &mdash; Position Command Safety Limiter <span class="new-badge">NEW in v9</span></h3>
+<p class="cmd-desc">Firmware-level protection against dangerous large position jumps via <code>0xA3</code>.
+Without protection, a large position step causes the PID to output maximum current instantaneously, which can trigger DRV/FET overcurrent faults.</p>
+
+<div class="terminal">
+<span class="prompt">$</span> or_limit &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># Show current settings and hit log</span><br>
+<span class="prompt">$</span> or_limit 0 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># OFF (no limiting)</span><br>
+<span class="prompt">$</span> or_limit 1 [deg] [dps] &nbsp;&nbsp;<span class="comment"># REDIRECT mode (default: 60 deg, 10000 dps)</span><br>
+<span class="prompt">$</span> or_limit 2 [ramp_ms] &nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># RAMP mode (default: 5 ms)</span>
+</div>
+
+<!-- Background: Two Position Control Paths -->
+<h3 style="margin-top: 24px;">Background: Two Position Control Paths</h3>
+
+<table>
+  <tr><th style="width:100px;"></th><th>0xA3 &mdash; Direct PID</th><th>0xA4 &mdash; Servo Controller</th></tr>
+  <tr>
+    <td><strong>Control Loop</strong></td>
+    <td><code>run_pid_control_pos_accum()</code> @10kHz<br>
+      <code>output = Kp&middot;e + Ki&middot;&int;e + Kd&middot;de/dt</code> &rarr; <code>iq = output &times; I_max</code></td>
+    <td>Trapezoidal velocity profile generator<br>
+      Speed capped at <code>Vel_maximum</code> (DPS)</td>
+  </tr>
+  <tr>
+    <td><strong>Velocity Limit</strong></td>
+    <td>None &mdash; full current immediately</td>
+    <td>Yes &mdash; <code>maxSpeed</code> parameter</td>
+  </tr>
+  <tr>
+    <td><strong>Characteristics</strong></td>
+    <td>Fast response, best for small steps &amp; tracking</td>
+    <td>Smooth accel/decel, safe for large moves</td>
+  </tr>
+</table>
+
+<!-- Mode Details -->
+<h3 style="margin-top: 24px;">Mode 1: REDIRECT &mdash; Control Path Switching</h3>
+<p><strong>Intercept point:</strong> <code>app_openrobot_set_position()</code> (command reception) + control loop (auto-return)</p>
+
+<p>When <code>|target &minus; current_pos| &gt; max_step</code>:</p>
+<ul style="font-size: 14px;">
+  <li>Redirects to the servo controller (0xA4 path) with DPS velocity limiting</li>
+  <li>Motor follows trapezoidal velocity profile toward target</li>
+  <li><strong>Auto-return:</strong> control loop monitors position error. When <code>|target &minus; current_pos| &le; max_step</code>, automatically switches back to Direct PID.</li>
+</ul>
+
+<p>This means both single-shot and repeated <code>0xA3</code> commands always end up in <strong>Direct PID at steady state</strong>:</p>
+
+<div style="background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin: 12px 0; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.8;">
+  0xA3 command received (target=360&deg;, current=0&deg;)<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&darr;<br>
+  |360 &minus; 0| = 360&deg; &gt; <strong>max_step</strong> (60&deg;) ?<br>
+  &nbsp;&nbsp;YES &rarr; <strong>Servo controller</strong> (DPS-limited, trapezoidal profile)<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&darr; &nbsp;motor moving toward target...<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|360 &minus; 305| = 55&deg; &le; max_step ?<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;YES &rarr; <strong>Auto-return to Direct PID</strong><br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&darr;<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Steady state: Direct PID holding at 360&deg;
+</div>
+
+<table style="margin-top: 8px;">
+  <tr><th style="width:140px;">Parameter</th><th>Description</th><th>Default</th></tr>
+  <tr><td><code>deg</code></td><td>Step threshold &mdash; redirect if |delta| exceeds this. Also used as auto-return threshold.</td><td>60&deg;</td></tr>
+  <tr><td><code>dps</code></td><td>Max speed for servo controller redirect path</td><td>10000 dps</td></tr>
+</table>
+
+<h3 style="margin-top: 24px;">Mode 2: RAMP &mdash; PID Output Slew Rate Limiting</h3>
+<p><strong>Intercept point:</strong> <code>run_pid_control_pos_accum()</code> (inside Direct PID loop @10kHz)</p>
+
+<p>The position controller remains <strong>0xA3 Direct PID</strong>, but the PID output increase rate is clamped:</p>
+
+<div style="background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 16px; margin: 12px 0; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.8;">
+  PID computes output (e.g., 0.85)<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&darr;<br>
+  |output| &gt; |prev_output| ? &nbsp;(magnitude increasing?)<br>
+  &nbsp;&nbsp;YES &rarr; clamp delta to &plusmn;<strong>ramp_rate</strong> per cycle<br>
+  &nbsp;&nbsp;NO &nbsp;&rarr; pass through (<strong>free braking</strong>)<br>
+  &nbsp;&nbsp;&nbsp;&nbsp;&darr;<br>
+  iq = output &times; motor_current_max
+</div>
+
+<ul style="font-size: 14px; margin-top: 8px;">
+  <li>Only limits when |output| is <strong>increasing</strong> (away from zero)</li>
+  <li><strong>Braking/convergence is unrestricted</strong> &mdash; prevents oscillation</li>
+  <li>Default: 0.02/cycle &rarr; 0 to full output in 5 ms (50 cycles @10kHz)</li>
+</ul>
+
+<table style="margin-top: 8px;">
+  <tr><th style="width:140px;">Parameter</th><th>Description</th><th>Default</th></tr>
+  <tr><td><code>ramp_ms</code></td><td>Time for PID output to ramp from 0 to 100%</td><td>5 ms</td></tr>
+</table>
+
+<!-- Comparison Table -->
+<h3 style="margin-top: 24px;">Comparison</h3>
+
+<table>
+  <tr><th></th><th>Mode 1 (REDIRECT)</th><th>Mode 2 (RAMP)</th></tr>
+  <tr><td><strong>Intercept point</strong></td><td>Command reception + control loop</td><td>Direct PID loop (10kHz)</td></tr>
+  <tr><td><strong>Method</strong></td><td>Switches to servo controller</td><td>Limits PID output slew rate</td></tr>
+  <tr><td><strong>Position controller</strong></td><td>Servo &rarr; auto-return to Direct PID</td><td>Always Direct PID</td></tr>
+  <tr><td><strong>Steady state</strong></td><td>Direct PID (auto-return)</td><td>Direct PID</td></tr>
+  <tr><td><strong>Velocity profile</strong></td><td>Trapezoidal (accel&rarr;cruise&rarr;decel)</td><td>None (PID response with ramp)</td></tr>
+  <tr><td><strong>Current limiting</strong></td><td>Indirect (via velocity limit)</td><td>Direct (output rate limit)</td></tr>
+  <tr><td><strong>Default params</strong></td><td>60&deg; threshold, 10000 dps</td><td>5 ms (0&rarr;full)</td></tr>
+  <tr><td><strong>Advantage</strong></td><td>Smooth profile, intuitive</td><td>Simple, preserves PID characteristics</td></tr>
+</table>
+
+<div class="info" style="margin-top: 12px;">
+  Settings are <strong>auto-saved to EEPROM</strong> on mode change.
+  Hit counter and last 10 events are logged (viewable via <code>or_limit</code>).
+</div>
+
+<!-- ============================================================ -->
+<!-- VESC EID PROTOCOL -->
+<!-- ============================================================ -->
+<h2>VESC EID Protocol <span class="new-badge">NEW in v10</span></h2>
+
+<p>CAN Extended ID (EID)를 사용하는 VESC 내장 통신 프로토콜. SID 프로토콜과 별도로 동작하며, MCCONF/APPCONF 파라미터 설정, 펌웨어 업로드, 리부트 등에 사용된다.</p>
+
+<h3>EID Frame Format</h3>
+<table class="general-table">
+  <tr><th>Item</th><th>Value</th></tr>
+  <tr><td>Frame Type</td><td>Extended (EID, 29-bit)</td></tr>
+  <tr><td>EID Format</td><td><code>(packet_type &lt;&lt; 8) | target_id</code></td></tr>
+  <tr><td>Byte Order</td><td>Big-Endian</td></tr>
+  <tr><td>PC Sender ID</td><td><code>0xFE</code> (254)</td></tr>
+</table>
+
+<div class="info">
+  VESC EID는 multi-frame 프로토콜을 사용하여 8바이트 CAN 프레임 제한을 넘는 대용량 데이터를 전송한다.
+  <code>FILL_RX_BUFFER</code> &rarr; <code>PROCESS_RX_BUFFER</code> 순서로 데이터를 분할/재조립한다.
+</div>
+
+<h3>VESC EID Packet Types</h3>
+<table>
+  <tr><th>Type</th><th>Value</th><th>Direction</th><th>Description</th></tr>
+  <tr><td><code>CAN_PACKET_FILL_RX_BUFFER</code></td><td>5</td><td>TX/RX</td><td>Multi-frame 데이터 버퍼 채우기</td></tr>
+  <tr><td><code>CAN_PACKET_FILL_RX_BUFFER_LONG</code></td><td>6</td><td>TX/RX</td><td>Long index (16-bit offset) 버퍼 채우기</td></tr>
+  <tr><td><code>CAN_PACKET_PROCESS_RX_BUFFER</code></td><td>7</td><td>TX/RX</td><td>버퍼 처리 명령 (CRC 포함)</td></tr>
+  <tr><td><code>CAN_PACKET_PROCESS_SHORT_BUFFER</code></td><td>8</td><td>TX/RX</td><td>짧은 단일 프레임 명령</td></tr>
+</table>
+
+<h3>주요 VESC Commands (CommPacketId)</h3>
+<table class="summary-table">
+  <tr><th>ID</th><th>Command</th><th>Type</th><th>Description</th></tr>
+  <tr><td><code>0</code></td><td>COMM_FW_VERSION</td><td class="type-read">Read</td><td>펌웨어 버전 조회</td></tr>
+  <tr><td><code>14</code></td><td>COMM_GET_MCCONF</td><td class="type-read">Read</td><td>Motor Configuration 읽기 (~457 bytes)</td></tr>
+  <tr><td><code>13</code></td><td>COMM_SET_MCCONF</td><td class="type-write">Write</td><td>Motor Configuration 쓰기</td></tr>
+  <tr><td><code>15</code></td><td>COMM_GET_MCCONF_DEFAULT</td><td class="type-read">Read</td><td>Motor Configuration 기본값 읽기</td></tr>
+  <tr><td><code>17</code></td><td>COMM_GET_APPCONF</td><td class="type-read">Read</td><td>App Configuration 읽기 (~418 bytes)</td></tr>
+  <tr><td><code>16</code></td><td>COMM_SET_APPCONF</td><td class="type-write">Write</td><td>App Configuration 쓰기</td></tr>
+  <tr><td><code>18</code></td><td>COMM_GET_APPCONF_DEFAULT</td><td class="type-read">Read</td><td>App Configuration 기본값 읽기</td></tr>
+  <tr><td><code>28</code></td><td>COMM_REBOOT</td><td class="type-control">Control</td><td>MCU 리부트 (IWDG watchdog 리셋)</td></tr>
+  <tr><td><code>31</code></td><td>COMM_ERASE_NEW_APP</td><td class="type-write">Write</td><td>Staging area 삭제 (펌웨어 업로드 1단계)</td></tr>
+  <tr><td><code>32</code></td><td>COMM_WRITE_NEW_APP_DATA</td><td class="type-write">Write</td><td>Staging area에 바이너리 쓰기 (2단계)</td></tr>
+  <tr><td><code>36</code></td><td>COMM_JUMP_TO_BOOTLOADER</td><td class="type-control">Control</td><td>부트로더로 점프 (3단계)</td></tr>
+  <tr><td><code>46</code></td><td>COMM_ERASE_BOOTLOADER</td><td class="type-write">Write</td><td>부트로더 섹터 삭제 (부트로더 업로드 시)</td></tr>
+</table>
+
+<h3>MCCONF PID Offsets</h3>
+<p class="cmd-desc">MCCONF 바이너리 페이로드 내 PID 파라미터 오프셋 (MCCONF_SIGNATURE: <code>0x83C3E1AA</code>). 값은 VESC <code>float32_auto</code> 포맷 (4 bytes Big-Endian).</p>
+
+<table>
+  <tr><th>Parameter</th><th>Speed PID Offset</th><th>Position PID Offset</th></tr>
+  <tr><td>Kp</td><td>329</td><td>354</td></tr>
+  <tr><td>Ki</td><td>333</td><td>358</td></tr>
+  <tr><td>Kd</td><td>337</td><td>362</td></tr>
+  <tr><td>Kd Filter</td><td>341</td><td>366</td></tr>
+  <tr><td>Ramp (eRPM/s)</td><td>350</td><td>&mdash;</td></tr>
+</table>
+
+<div class="note-box">
+  <div class="note-title">부연설명 &mdash; MCCONF PID 읽기/쓰기</div>
+  <strong>읽기:</strong> COMM_GET_MCCONF (14)를 전송하면 전체 MCCONF 바이너리(~457 bytes)가 반환됨. 위 오프셋에서 PID 값을 추출.<br>
+  <strong>쓰기:</strong> 읽은 원본 MCCONF를 복사하고, 수정할 PID 값만 해당 오프셋에 패치한 후 COMM_SET_MCCONF (13)로 전송.<br>
+  <strong>주의:</strong> 반드시 원본 MCCONF를 먼저 읽은 후(Read Gains), PID 값만 수정하여 전체를 다시 쓰는 방식을 사용해야 함. 그렇지 않으면 다른 설정값이 손상될 수 있음.
+</div>
+
+<h3>Firmware Upload via CAN EID</h3>
+
+<div class="note-box">
+  <div class="note-title">부연설명 &mdash; CAN 펌웨어/부트로더 업로드</div>
+  <strong>Firmware Upload:</strong><br>
+  1. <code>COMM_ERASE_NEW_APP(size)</code> &mdash; Staging area (Flash sectors 8-10) 삭제<br>
+  2. <code>COMM_WRITE_NEW_APP_DATA(offset, data)</code> &mdash; 바이너리 데이터를 400-byte 청크로 분할 전송<br>
+  3. <code>COMM_JUMP_TO_BOOTLOADER</code> &mdash; 부트로더가 staging &rarr; app 영역으로 복사<br><br>
+  <strong>Bootloader Upload:</strong><br>
+  1~2 단계 동일<br>
+  3. <code>COMM_ERASE_BOOTLOADER</code> &mdash; 부트로더 섹터 (Flash sector 11, 128KB) 삭제<br>
+  4. <code>COMM_JUMP_TO_BOOTLOADER</code> &mdash; staging의 부트로더가 sector 11에 자기 자신을 복사<br><br>
+  <strong>주의:</strong> 부트로더 업로드 실패 시 복구 불가 (JTAG 필요). 반드시 안정적인 전원과 CAN 연결 상태에서 수행할 것.
+</div>
+
+<h3>Encoder Native Resolution <span class="new-badge">NEW in v10</span></h3>
+
+<table>
+  <tr><th>Encoder</th><th>Resolution</th><th>CPR</th><th>Note</th></tr>
+  <tr><td>AS5047</td><td>14-bit</td><td>16,384</td><td>CAN SID 프레임과 동일 해상도</td></tr>
+  <tr><td>MT6835</td><td>21-bit</td><td>2,097,152</td><td>CAN SID에서는 14-bit로 정규화하여 전송</td></tr>
+</table>
+
+<div class="warning">
+  <strong>Overflow 주의:</strong> MT6835 21-bit 값 &times; 16384 연산 시 uint32_t 오버플로 발생 (45&deg; 이상에서).
+  반드시 <code>uint64_t</code> 캐스트 사용: <code>(uint64_t)val * ENCODER_CPR_AS5047 / cpr</code>
+</div>
+
+<!-- ============================================================ -->
+<!-- REVISION HISTORY -->
+<!-- ============================================================ -->
+<h2>Revision History</h2>
+
+<table class="revision-table">
+  <tr><th>Version</th><th>Date</th><th>Changes</th></tr>
+  <tr>
+    <td>v7</td>
+    <td>2024-11-18</td>
+    <td>Encoder offset, damping torque, fault code, current limit R/W.</td>
+  </tr>
+  <tr>
+    <td>v8</td>
+    <td>2025-05-15</td>
+    <td><code>0xA3</code> changed to multi-turn direct PID. <code>0xB0</code>/<code>0xB1</code>/<code>0xB2</code> added. All control commands changed to single-shot (1회 전달 후 유지).</td>
+  </tr>
+  <tr>
+    <td>v9</td>
+    <td>2026-02-09</td>
+    <td><code>0x9C</code> (Read Motor Status 2) added. <code>0x9D</code> (Read Motor Status 3: control mode + phase currents) added. <code>or_limit</code> safety limiter added. Encoder 14-bit normalization for MT6835. <code>0xA2</code> speed_mode (DPS/eRPM) added.</td>
+  </tr>
+  <tr style="background: var(--new-bg); font-weight: 600;">
+    <td>v10</td>
+    <td>2026-02-11</td>
+    <td>VESC EID Protocol section added. Encoder native resolution (AS5047 14-bit / MT6835 21-bit) with uint64_t overflow fix. COMM_REBOOT HardFault bug fixed. CAN firmware/bootloader upload. Position/Speed PID via MCCONF EID.</td>
+  </tr>
+</table>
+
+<!-- ============================================================ -->
+<!-- FOOTER -->
+<!-- ============================================================ -->
+<div class="doc-footer">
+  OpenRobot Motor CAN Protocol &mdash; OpenRobot MC v10 &nbsp;|&nbsp; DRCL / OpenRobot &nbsp;|&nbsp; 2026-02-11
+</div>
+
+</body>
+</html>
