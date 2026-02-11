@@ -2,6 +2,7 @@
 Parameter tab — read/display/edit MCCONF & APPCONF, write to VESC, save/load XML.
 """
 
+import os
 import struct
 from collections import OrderedDict
 from datetime import datetime
@@ -9,7 +10,7 @@ from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTabWidget, QTreeWidget, QTreeWidgetItem, QFileDialog, QMessageBox,
-    QSpinBox, QMenu, QLineEdit, QComboBox,
+    QSpinBox, QMenu, QLineEdit, QComboBox, QCheckBox, QSizePolicy,
 )
 from PyQt6.QtGui import QFont, QColor
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -103,9 +104,9 @@ class ParameterTab(QWidget):
 
         self.status_label = QLabel("Last read: never")
         self.status_label.setStyleSheet("color: #888; font-size: 9pt;")
-        row1.addWidget(self.status_label)
-
-        row1.addStretch()
+        self.status_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.status_label.setMinimumWidth(80)
+        row1.addWidget(self.status_label, 1)  # stretch=1 so it fills available space
 
         search_label = QLabel("Search:")
         search_label.setStyleSheet("color: #ccc;")
@@ -117,6 +118,11 @@ class ParameterTab(QWidget):
         self.search_edit.setFixedWidth(200)
         self.search_edit.textChanged.connect(self._on_search)
         row1.addWidget(self.search_edit)
+
+        self.search_keep_chk = QCheckBox("Keep")
+        self.search_keep_chk.setToolTip("Keep search filter after Read MCCONF/APPCONF or Load XML")
+        self.search_keep_chk.setChecked(True)
+        row1.addWidget(self.search_keep_chk)
 
         self.search_result_label = QLabel("")
         self.search_result_label.setStyleSheet("color: #888; font-size: 9pt;")
@@ -179,6 +185,14 @@ class ParameterTab(QWidget):
 
         # ── Sub-tabs: MCCONF / APPCONF ────────────────────────────────
         self.sub_tabs = QTabWidget()
+        self.sub_tabs.setStyleSheet(
+            "QTabBar::tab { background: #3a3a3a; color: #888; "
+            "padding: 6px 16px; border: 1px solid #555; "
+            "border-bottom: none; margin-right: 2px; }"
+            "QTabBar::tab:selected { background: #505050; color: #fff; "
+            "font-weight: bold; border-bottom: 2px solid #4FC3F7; }"
+            "QTabBar::tab:hover:!selected { background: #444; color: #bbb; }"
+        )
         layout.addWidget(self.sub_tabs)
 
         self.mc_tree = self._create_tree()
@@ -268,6 +282,10 @@ class ParameterTab(QWidget):
     def _on_search(self, text: str):
         """Find and scroll to matching parameters in current tree."""
         tree = self._current_tree()
+        self._apply_search_to_tree(tree, text)
+
+    def _apply_search_to_tree(self, tree: QTreeWidget, text: str):
+        """Apply search filter to a specific tree. Reusable for Keep re-apply."""
         text = text.strip().lower()
         if not text:
             self.search_result_label.setText("")
@@ -300,6 +318,13 @@ class ParameterTab(QWidget):
         # Scroll to first match
         if matches:
             tree.scrollToItem(matches[0])
+
+    def _maybe_reapply_search(self, tree: QTreeWidget):
+        """Re-apply search filter if Keep checkbox is checked."""
+        if self.search_keep_chk.isChecked():
+            text = self.search_edit.text()
+            if text.strip():
+                self._apply_search_to_tree(tree, text)
 
     # ── Context menu ───────────────────────────────────────────────────
 
@@ -739,6 +764,7 @@ class ParameterTab(QWidget):
         self._populate_tree(self.mc_tree, self._mcconf_values, MCCONF_FIELDS,
                             original=self._mcconf_original)
         self.mc_tree.expandAll()
+        self._maybe_reapply_search(self.mc_tree)
         self.sub_tabs.setCurrentIndex(0)
 
         label = "MCCONF Default" if is_default else "MCCONF"
@@ -779,6 +805,7 @@ class ParameterTab(QWidget):
         self._populate_tree(self.app_tree, self._appconf_values, APPCONF_FIELDS,
                             original=self._appconf_original)
         self.app_tree.expandAll()
+        self._maybe_reapply_search(self.app_tree)
         self.sub_tabs.setCurrentIndex(1)
 
         label = "APPCONF Default" if is_default else "APPCONF"
@@ -818,7 +845,9 @@ class ParameterTab(QWidget):
         with open(path, "w", encoding="utf-8") as f:
             f.write(xml_str)
 
-        self.status_label.setText(f"Saved {root_tag} to {path}")
+        fname = os.path.basename(path)
+        self.status_label.setText(f"Saved {root_tag} to {fname}")
+        self.status_label.setToolTip(path)
 
     def _on_load_xml(self):
         """Load a VESC-Tool XML config and display in tree."""
@@ -841,12 +870,14 @@ class ParameterTab(QWidget):
             # MCU column stays = MCU value, Tool = loaded XML
             self._populate_tree(self.mc_tree, values, MCCONF_FIELDS,
                                 original=self._mcconf_original)
+            self._maybe_reapply_search(self.mc_tree)
             self.sub_tabs.setCurrentIndex(0)
         elif root_tag == "APPConfiguration":
             self._appconf_values = values
             self._app_dirty.clear()
             self._populate_tree(self.app_tree, values, APPCONF_FIELDS,
                                 original=self._appconf_original)
+            self._maybe_reapply_search(self.app_tree)
             self.sub_tabs.setCurrentIndex(1)
 
         ts = datetime.now().strftime("%H:%M:%S")

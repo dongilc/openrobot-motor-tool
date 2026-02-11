@@ -10,7 +10,7 @@ One active at a time; Start locks selection, Motor OFF/STOP releases all.
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
     QPushButton, QLabel, QDoubleSpinBox, QSpinBox, QSlider, QComboBox,
-    QMessageBox, QGridLayout, QScrollArea, QFrame, QCheckBox,
+    QMessageBox, QGridLayout, QScrollArea, QFrame, QCheckBox, QTabWidget,
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 
@@ -60,23 +60,15 @@ class CanControlTab(QWidget):
     def _build_ui(self):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(4, 4, 4, 4)
+        outer.setSpacing(6)
 
-        # Scroll area for compact dock
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
-        container = QWidget()
-        layout = QVBoxLayout(container)
-        layout.setSpacing(6)
-        scroll.setWidget(container)
-        outer.addWidget(scroll)
-
-        # ── Send rate row ──
+        # ── Send rate row (shared, always visible) ──
         top_row = QHBoxLayout()
-        layout.addLayout(top_row)
+        outer.addLayout(top_row)
 
         self.periodic_chk = QCheckBox("Periodic")
         self.periodic_chk.setToolTip("Send commands repeatedly at Send Rate")
+        self.periodic_chk.setChecked(True)
         self.periodic_chk.toggled.connect(self._on_periodic_toggled)
         top_row.addWidget(self.periodic_chk)
 
@@ -89,9 +81,9 @@ class CanControlTab(QWidget):
 
         top_row.addStretch()
 
-        # ── LPF row ──
+        # ── LPF row (shared, always visible) ──
         lpf_row = QHBoxLayout()
-        layout.addLayout(lpf_row)
+        outer.addLayout(lpf_row)
 
         self.lpf_chk = QCheckBox("LPF")
         self.lpf_chk.setToolTip("Low-pass filter on slider commands (implies periodic)")
@@ -115,10 +107,7 @@ class CanControlTab(QWidget):
 
         lpf_row.addStretch()
 
-        # ── STOP button (all modes) ──
-        stop_row = QHBoxLayout()
-        layout.addLayout(stop_row)
-
+        # ── STOP ALL button (shared, always visible) ──
         self.stop_all_btn = QPushButton("STOP ALL")
         self.stop_all_btn.setMinimumHeight(34)
         self.stop_all_btn.setStyleSheet(
@@ -128,48 +117,31 @@ class CanControlTab(QWidget):
             "QPushButton:hover { background-color: #dd4444; }"
         )
         self.stop_all_btn.clicked.connect(self._stop_all)
-        stop_row.addWidget(self.stop_all_btn)
-
-        # ── Motor OFF / STOP / START (RMD) ──
-        motor_row = QHBoxLayout()
-        layout.addLayout(motor_row)
-
-        off_btn = QPushButton("Motor OFF")
-        off_btn.setMinimumHeight(28)
-        off_btn.setStyleSheet(
-            "QPushButton { background-color: #884400; color: white; font-weight: bold; }"
-            "QPushButton:pressed { background-color: #442200; border: 2px solid #ffaa00; }"
-            "QPushButton:hover { background-color: #995500; }"
-        )
-        off_btn.clicked.connect(lambda: self._motor_cmd(build_motor_off()))
-        motor_row.addWidget(off_btn)
-
-        stop_motor_btn = QPushButton("Motor STOP")
-        stop_motor_btn.setMinimumHeight(28)
-        stop_motor_btn.setStyleSheet(
-            "QPushButton:pressed { background-color: #222; border: 2px solid #aaa; }"
-        )
-        stop_motor_btn.clicked.connect(lambda: self._motor_cmd(build_motor_stop()))
-        motor_row.addWidget(stop_motor_btn)
-
-        start_motor_btn = QPushButton("Motor START")
-        start_motor_btn.setMinimumHeight(28)
-        start_motor_btn.setStyleSheet(
-            "QPushButton { background-color: #338833; color: white; font-weight: bold; }"
-            "QPushButton:pressed { background-color: #114411; border: 2px solid #66ff66; }"
-            "QPushButton:hover { background-color: #449944; }"
-        )
-        start_motor_btn.clicked.connect(lambda: self._motor_cmd(build_motor_start()))
-        motor_row.addWidget(start_motor_btn)
+        outer.addWidget(self.stop_all_btn)
 
         # ══════════════════════════════════════════════════
-        # ── VESC EID Control Section ──
+        # ── Tab widget: VESC EID / RMD CAN ──
         # ══════════════════════════════════════════════════
+        self.control_tabs = QTabWidget()
+        self.control_tabs.setStyleSheet(
+            "QTabBar::tab { background: #3a3a3a; color: #888; "
+            "padding: 6px 16px; border: 1px solid #555; "
+            "border-bottom: none; margin-right: 2px; }"
+            "QTabBar::tab:selected { background: #505050; color: #fff; "
+            "font-weight: bold; border-bottom: 2px solid #4FC3F7; }"
+            "QTabBar::tab:hover:!selected { background: #444; color: #bbb; }"
+        )
+        outer.addWidget(self.control_tabs, stretch=1)
 
-        vesc_header = QLabel("─── VESC EID Control ───")
-        vesc_header.setStyleSheet("font-weight: bold; color: #ffaa44; padding: 4px 0;")
-        vesc_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(vesc_header)
+        # ── VESC EID Tab ──
+        vesc_scroll = QScrollArea()
+        vesc_scroll.setWidgetResizable(True)
+        vesc_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        vesc_container = QWidget()
+        vesc_layout = QVBoxLayout(vesc_container)
+        vesc_layout.setSpacing(6)
+        vesc_scroll.setWidget(vesc_container)
+        self.control_tabs.addTab(vesc_scroll, "VESC EID")
 
         # ── VESC Duty ──
         vd_group = QGroupBox("Duty")
@@ -200,7 +172,7 @@ class CanControlTab(QWidget):
         )
         self.vesc_duty_start_btn.clicked.connect(lambda: self._start("vesc_duty"))
         vdl.addWidget(self.vesc_duty_start_btn)
-        layout.addWidget(vd_group)
+        vesc_layout.addWidget(vd_group)
 
         # ── VESC Current ──
         vc_group = QGroupBox("Current")
@@ -233,7 +205,7 @@ class CanControlTab(QWidget):
         )
         self.vesc_current_start_btn.clicked.connect(lambda: self._start("vesc_current"))
         vcl.addWidget(self.vesc_current_start_btn)
-        layout.addWidget(vc_group)
+        vesc_layout.addWidget(vc_group)
 
         # ── VESC Speed ──
         vs_group = QGroupBox("Speed (eRPM)")
@@ -264,7 +236,7 @@ class CanControlTab(QWidget):
         )
         self.vesc_speed_start_btn.clicked.connect(lambda: self._start("vesc_speed"))
         vsl.addWidget(self.vesc_speed_start_btn)
-        layout.addWidget(vs_group)
+        vesc_layout.addWidget(vs_group)
 
         # ── VESC Position ──
         vp_group = QGroupBox("Position (deg)")
@@ -295,16 +267,75 @@ class CanControlTab(QWidget):
         )
         self.vesc_pos_start_btn.clicked.connect(lambda: self._start("vesc_position"))
         vpl.addWidget(self.vesc_pos_start_btn)
-        layout.addWidget(vp_group)
+        vesc_layout.addWidget(vp_group)
 
-        # ══════════════════════════════════════════════════
-        # ── RMD CAN Control Section ──
-        # ══════════════════════════════════════════════════
+        # VESC feedback
+        vesc_fb_group = QGroupBox("VESC Feedback")
+        vesc_fb_layout = QGridLayout(vesc_fb_group)
+        vesc_fb_layout.setSpacing(2)
 
-        rmd_header = QLabel("─── RMD CAN Control ───")
-        rmd_header.setStyleSheet("font-weight: bold; color: #88aaff; padding: 4px 0;")
-        rmd_header.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(rmd_header)
+        self.vesc_fb_labels = {}
+        vesc_items = [
+            ("Duty:", "duty"), ("I_motor:", "i_motor"),
+            ("I_input:", "i_input"), ("RPM:", "rpm"),
+            ("Position:", "position"), ("V_in:", "v_in"),
+            ("Power:", "power"), ("T_mos:", "temp_mos"),
+            ("T_mot:", "temp_mot"), ("Fault:", "fault"),
+        ]
+        for i, (label, key) in enumerate(vesc_items):
+            row, col = i // 2, (i % 2) * 2
+            lb = QLabel(label)
+            lb.setStyleSheet("font-size: 11px; font-weight: bold;")
+            vesc_fb_layout.addWidget(lb, row, col)
+            val = QLabel("--")
+            val.setStyleSheet("font-family: monospace; font-size: 11px;")
+            vesc_fb_layout.addWidget(val, row, col + 1)
+            self.vesc_fb_labels[key] = val
+
+        vesc_layout.addWidget(vesc_fb_group)
+        vesc_layout.addStretch()
+
+        # ── RMD CAN Tab ──
+        rmd_scroll = QScrollArea()
+        rmd_scroll.setWidgetResizable(True)
+        rmd_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        rmd_container = QWidget()
+        rmd_layout = QVBoxLayout(rmd_container)
+        rmd_layout.setSpacing(6)
+        rmd_scroll.setWidget(rmd_container)
+        self.control_tabs.addTab(rmd_scroll, "RMD CAN")
+
+        # ── Motor OFF / STOP / START (RMD) ──
+        motor_row = QHBoxLayout()
+        rmd_layout.addLayout(motor_row)
+
+        off_btn = QPushButton("Motor OFF")
+        off_btn.setMinimumHeight(28)
+        off_btn.setStyleSheet(
+            "QPushButton { background-color: #884400; color: white; font-weight: bold; }"
+            "QPushButton:pressed { background-color: #442200; border: 2px solid #ffaa00; }"
+            "QPushButton:hover { background-color: #995500; }"
+        )
+        off_btn.clicked.connect(lambda: self._motor_cmd(build_motor_off()))
+        motor_row.addWidget(off_btn)
+
+        stop_motor_btn = QPushButton("Motor STOP")
+        stop_motor_btn.setMinimumHeight(28)
+        stop_motor_btn.setStyleSheet(
+            "QPushButton:pressed { background-color: #222; border: 2px solid #aaa; }"
+        )
+        stop_motor_btn.clicked.connect(lambda: self._motor_cmd(build_motor_stop()))
+        motor_row.addWidget(stop_motor_btn)
+
+        start_motor_btn = QPushButton("Motor START")
+        start_motor_btn.setMinimumHeight(28)
+        start_motor_btn.setStyleSheet(
+            "QPushButton { background-color: #338833; color: white; font-weight: bold; }"
+            "QPushButton:pressed { background-color: #114411; border: 2px solid #66ff66; }"
+            "QPushButton:hover { background-color: #449944; }"
+        )
+        start_motor_btn.clicked.connect(lambda: self._motor_cmd(build_motor_start()))
+        motor_row.addWidget(start_motor_btn)
 
         # ── Torque Control ──
         torque_group = QGroupBox("Torque (0xA1)")
@@ -340,7 +371,7 @@ class CanControlTab(QWidget):
         )
         self.torque_start_btn.clicked.connect(lambda: self._start("torque"))
         tl.addWidget(self.torque_start_btn)
-        layout.addWidget(torque_group)
+        rmd_layout.addWidget(torque_group)
 
         # ── Speed Control ──
         speed_group = QGroupBox("Speed (0xA2)")
@@ -388,7 +419,7 @@ class CanControlTab(QWidget):
         )
         self.speed_start_btn.clicked.connect(lambda: self._start("speed"))
         sl.addWidget(self.speed_start_btn)
-        layout.addWidget(speed_group)
+        rmd_layout.addWidget(speed_group)
 
         # ── Position Control ──
         pos_group = QGroupBox("Position (0xA3)")
@@ -424,7 +455,7 @@ class CanControlTab(QWidget):
         )
         self.pos_start_btn.clicked.connect(lambda: self._start("position"))
         pl.addWidget(self.pos_start_btn)
-        layout.addWidget(pos_group)
+        rmd_layout.addWidget(pos_group)
 
         # ── Multiturn Position ──
         mt_group = QGroupBox("Multiturn Position (0xA4)")
@@ -468,11 +499,7 @@ class CanControlTab(QWidget):
         )
         self.mt_start_btn.clicked.connect(lambda: self._start("multiturn"))
         ml.addWidget(self.mt_start_btn)
-        layout.addWidget(mt_group)
-
-        # ══════════════════════════════════════════════════
-        # ── Live Feedback ──
-        # ══════════════════════════════════════════════════
+        rmd_layout.addWidget(mt_group)
 
         # RMD feedback
         rmd_fb_group = QGroupBox("RMD Feedback")
@@ -494,34 +521,8 @@ class CanControlTab(QWidget):
             rmd_fb_layout.addWidget(val, row, col + 1)
             self.fb_labels[key] = val
 
-        layout.addWidget(rmd_fb_group)
-
-        # VESC feedback
-        vesc_fb_group = QGroupBox("VESC Feedback")
-        vesc_fb_layout = QGridLayout(vesc_fb_group)
-        vesc_fb_layout.setSpacing(2)
-
-        self.vesc_fb_labels = {}
-        vesc_items = [
-            ("Duty:", "duty"), ("I_motor:", "i_motor"),
-            ("I_input:", "i_input"), ("RPM:", "rpm"),
-            ("Position:", "position"), ("V_in:", "v_in"),
-            ("Power:", "power"), ("T_mos:", "temp_mos"),
-            ("T_mot:", "temp_mot"), ("Fault:", "fault"),
-        ]
-        for i, (label, key) in enumerate(vesc_items):
-            row, col = i // 2, (i % 2) * 2
-            lb = QLabel(label)
-            lb.setStyleSheet("font-size: 11px; font-weight: bold;")
-            vesc_fb_layout.addWidget(lb, row, col)
-            val = QLabel("--")
-            val.setStyleSheet("font-family: monospace; font-size: 11px;")
-            vesc_fb_layout.addWidget(val, row, col + 1)
-            self.vesc_fb_labels[key] = val
-
-        layout.addWidget(vesc_fb_group)
-
-        layout.addStretch()
+        rmd_layout.addWidget(rmd_fb_group)
+        rmd_layout.addStretch()
 
         # Collect all start buttons for enable/disable management
         self._all_start_btns = [
