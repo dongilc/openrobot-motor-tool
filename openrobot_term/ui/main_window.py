@@ -28,7 +28,7 @@ from .can_position_tuning_tab import CanPositionTuningTab
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("OpenRobot Motor Analyzer")
+        self.setWindowTitle("OpenRobot Motor Tool V2 (PCAN Only)")
 
         self.can_transport = PcanTransport()
 
