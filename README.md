@@ -2,6 +2,8 @@
 
 PyQt6 기반 OpenRobot 모터 컨트롤러 GUI 툴. **CAN-Only 아키텍처** — PCAN-USB를 통한 CAN 통신 전용.
 
+**[CAN Protocol Documentation](https://dongilc.github.io/openrobot-motor-tool/)** — OpenRobot MC CAN 통신 프로토콜 사양서 (SID/EID)
+
 ## Features
 
 ### CAN Control & Monitoring (PCAN-USB)
@@ -140,7 +142,7 @@ openrobot_motor_tool/
 - **RTOS**: ChibiOS 3.0.5
 - **Motor Controller**: OpenRobot MC 시리즈 (SPN-MC1 V1R2 60A)
 - **Encoder**: AS5047 (14-bit), MT6835 (21-bit) 지원
-- **CAN**: OpenRobot Motor CAN Protocol v9 + VESC EID Protocol
+- **CAN**: [OpenRobot Motor CAN Protocol v10](https://dongilc.github.io/openrobot-motor-tool/) (SID + VESC EID)
 
 ## License
 
