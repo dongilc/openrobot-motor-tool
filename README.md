@@ -42,6 +42,7 @@ PyQt6 기반 OpenRobot 모터 컨트롤러 GUI 툴. **CAN-Only 아키텍처** �
 - **OpenRobot 모터 컨트롤러** (SPN-MC1 V1R2 60A)
 - **USB-to-CAN 어댑터** (필수) — 아래 중 하나 필요:
   - [PCAN-USB](https://www.peak-system.com/PCAN-USB.199.0.html) (PEAK-System)
+  - [PCAN-USB FD](https://www.peak-system.com/PCAN-USB-FD.365.0.html) (PEAK-System, CAN FD 지원)
   - [Pibiger USB to CAN](https://www.pibiger-tech.com/) (PCAN 호환)
 
 > **Note**: 이 프로그램은 CAN-Only 아키텍처로 동작하며, USB-to-CAN 어댑터 없이는 사용할 수 없습니다. PCAN 드라이버가 설치되어 있어야 합니다.
