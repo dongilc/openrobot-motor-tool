@@ -317,9 +317,21 @@
     table { page-break-inside: avoid; }
     .warning, .info, .new-box, .note-box { page-break-inside: avoid; }
   }
+
+  /* Language toggle (v2.2) */
+  .lang-toggle {
+    position: fixed; top: 12px; right: 20px; z-index: 999;
+    background: var(--primary); color: #fff; border: none;
+    padding: 6px 16px; border-radius: 20px; cursor: pointer;
+    font-size: 13px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  }
+  .lang-toggle:hover { background: var(--primary-light); }
+  body.lang-en .ko { display: none; }
+  body.lang-ko .en { display: none; }
 </style>
 </head>
-<body>
+<body class="lang-ko">
+<button class="lang-toggle" onclick="toggleLang()">EN / 한국어</button>
 
 <!-- ============================================================ -->
 <!-- HEADER -->
@@ -340,58 +352,58 @@
 <div class="changelog">
   <h4>24-11-13</h4>
   <ul>
-    <li>encoder offset 반영 (원점 세팅에 유리하게)</li>
-    <li>torque control에 damping 기능 추가</li>
-    <li>fault code 읽을 수 있게 함</li>
+    <li><span class="ko">encoder offset 반영 (원점 세팅에 유리하게)</span><span class="en">Encoder offset applied (convenient for zero-point setting)</span></li>
+    <li><span class="ko">torque control에 damping 기능 추가</span><span class="en">Added damping feature to torque control</span></li>
+    <li><span class="ko">fault code 읽을 수 있게 함</span><span class="en">Enabled reading fault codes</span></li>
   </ul>
 
   <h4>24-11-18</h4>
   <ul>
-    <li>current limit 값 읽고 수정할 수 있게 함</li>
-    <li>fault code를 7개까지 읽을 수 있게 함 (최근 7개)</li>
-    <li>(TODO) RMD-x6-s2 에서 Motor Curr. Max 값이 대게 20A이하로 설정되어 있는데 이것을 50A이상 설정하면 위치제어시 진동발생(토크제어는 영향 없음) — 현재는 Motor Curr. Max 값을 자동 설정된 값 이상으로 바꾸는 것은 비추천</li>
+    <li><span class="ko">current limit 값 읽고 수정할 수 있게 함</span><span class="en">Enabled reading and modifying current limit values</span></li>
+    <li><span class="ko">fault code를 7개까지 읽을 수 있게 함 (최근 7개)</span><span class="en">Enabled reading up to 7 fault codes (most recent 7)</span></li>
+    <li><span class="ko">(TODO) RMD-x6-s2 에서 Motor Curr. Max 값이 대게 20A이하로 설정되어 있는데 이것을 50A이상 설정하면 위치제어시 진동발생(토크제어는 영향 없음) — 현재는 Motor Curr. Max 값을 자동 설정된 값 이상으로 바꾸는 것은 비추천</span><span class="en">(TODO) On RMD-x6-s2, Motor Curr. Max is typically set below 20A. Setting it above 50A causes oscillation in position control (torque control unaffected) — currently not recommended to set Motor Curr. Max above the auto-configured value</span></li>
   </ul>
 
-  <h4>24-12-12 (서울과기대, 국민대 방문, 요구사항 수렴)</h4>
+  <h4>24-12-12 <span class="ko">(서울과기대, 국민대 방문, 요구사항 수렴)</span><span class="en">(SeoulTech, Kookmin Univ. visit, requirements gathering)</span></h4>
   <ul>
-    <li>fault code시 해당 모터 정지하고, 전체 스탑은 상위컴에서 제어 (서울과기대 요청) &mdash; TODO</li>
-    <li>CAN으로 펌웨어 업데이트 한번에 가능하게 (서울과기대, 국민대 요청) &mdash; TODO</li>
-    <li>토크전류 리밋 CAN으로 설정 (국민대 요청) &mdash; 해결함 (Write Max Current to ROM)</li>
-    <li>모터튜닝파라미터 CAN으로 설정 (국민대 요청) &mdash; TODO</li>
+    <li><span class="ko">fault code시 해당 모터 정지하고, 전체 스탑은 상위컴에서 제어 (서울과기대 요청) &mdash; TODO</span><span class="en">On fault code, stop the corresponding motor; full stop controlled by host PC (SeoulTech request) &mdash; TODO</span></li>
+    <li><span class="ko">CAN으로 펌웨어 업데이트 한번에 가능하게 (서울과기대, 국민대 요청) &mdash; TODO</span><span class="en">Enable firmware update via CAN in one step (SeoulTech, Kookmin request) &mdash; TODO</span></li>
+    <li><span class="ko">토크전류 리밋 CAN으로 설정 (국민대 요청) &mdash; 해결함 (Write Max Current to ROM)</span><span class="en">Set torque current limit via CAN (Kookmin request) &mdash; resolved (Write Max Current to ROM)</span></li>
+    <li><span class="ko">모터튜닝파라미터 CAN으로 설정 (국민대 요청) &mdash; TODO</span><span class="en">Set motor tuning parameters via CAN (Kookmin request) &mdash; TODO</span></li>
   </ul>
 
   <h4>25-01-14</h4>
   <ul>
-    <li>fault code시 해당 모터 정지하고, 전체 스탑은 상위컴에서 제어 (서울과기대 요청) &mdash; TODO</li>
-    <li>CAN으로 펌웨어 업데이트 한번에 가능하게 (서울과기대, 국민대 요청) &mdash; 적용완료</li>
-    <li>토크전류 리밋 CAN으로 설정 (국민대 요청) &mdash; 적용완료 (Write Max Current to ROM)</li>
-    <li>모터튜닝파라미터 CAN으로 설정 (국민대 요청) &mdash; 적용완료 (VESC-Tool에서 CAN Forward 기능사용)</li>
-    <li>토크제어시 Damping 제어기능 수정보완 완료</li>
+    <li><span class="ko">fault code시 해당 모터 정지하고, 전체 스탑은 상위컴에서 제어 (서울과기대 요청) &mdash; TODO</span><span class="en">On fault code, stop the corresponding motor; full stop controlled by host PC (SeoulTech request) &mdash; TODO</span></li>
+    <li><span class="ko">CAN으로 펌웨어 업데이트 한번에 가능하게 (서울과기대, 국민대 요청) &mdash; 적용완료</span><span class="en">Enable firmware update via CAN in one step (SeoulTech, Kookmin request) &mdash; applied</span></li>
+    <li><span class="ko">토크전류 리밋 CAN으로 설정 (국민대 요청) &mdash; 적용완료 (Write Max Current to ROM)</span><span class="en">Set torque current limit via CAN (Kookmin request) &mdash; applied (Write Max Current to ROM)</span></li>
+    <li><span class="ko">모터튜닝파라미터 CAN으로 설정 (국민대 요청) &mdash; 적용완료 (VESC-Tool에서 CAN Forward 기능사용)</span><span class="en">Set motor tuning parameters via CAN (Kookmin request) &mdash; applied (using CAN Forward in VESC-Tool)</span></li>
+    <li><span class="ko">토크제어시 Damping 제어기능 수정보완 완료</span><span class="en">Completed damping control improvements for torque control</span></li>
   </ul>
 
-  <div class="important">변경사항: MOTOR_OFF, MOTOR_STOP, MOTOR_START, TORQUE_CLOSED_LOOP, SPEED_CLOSED_LOOP, POSITION_CLOSED_LOOP, SET_MULTITURN_POSITION 제어 모두 한번 명령을 전달하면 그 값이 유지되는 것으로 바꿈. 기존엔 몇몇 제어는 반복적으로 명령을 보내줘야만 제어가 유지되던 것을 일괄적으로 1회 전달된 명령이 유지되는 것으로 바꾸었음.</div>
+  <div class="important"><span class="ko">변경사항: MOTOR_OFF, MOTOR_STOP, MOTOR_START, TORQUE_CLOSED_LOOP, SPEED_CLOSED_LOOP, POSITION_CLOSED_LOOP, SET_MULTITURN_POSITION 제어 모두 한번 명령을 전달하면 그 값이 유지되는 것으로 바꿈. 기존엔 몇몇 제어는 반복적으로 명령을 보내줘야만 제어가 유지되던 것을 일괄적으로 1회 전달된 명령이 유지되는 것으로 바꾸었음.</span><span class="en">Change: All control commands (MOTOR_OFF, MOTOR_STOP, MOTOR_START, TORQUE_CLOSED_LOOP, SPEED_CLOSED_LOOP, POSITION_CLOSED_LOOP, SET_MULTITURN_POSITION) now retain their value after a single command. Previously some commands required repeated sending to maintain control; now all commands persist after a single transmission.</span></div>
 
   <h4>25-05-15</h4>
   <ul>
-    <li>Set multiturn pos 를 이용한 위치제어가 offset error 가 해결될 수 없는 구조로 되어 있음을 발견, 이를 해결하기위해 Position closed-loop1 을 multiturn 방식으로 바꾸고, dps_limit 없이 직접 PID 제어되도록 수정함. &rarr; PID 제어시에는 Position closed-loop1 을 사용하기를 추천함</li>
+    <li><span class="ko">Set multiturn pos 를 이용한 위치제어가 offset error 가 해결될 수 없는 구조로 되어 있음을 발견, 이를 해결하기위해 Position closed-loop1 을 multiturn 방식으로 바꾸고, dps_limit 없이 직접 PID 제어되도록 수정함. &rarr; PID 제어시에는 Position closed-loop1 을 사용하기를 추천함</span><span class="en">Discovered that position control using Set multiturn pos had an unresolvable offset error structure. To fix this, Position closed-loop1 was changed to multi-turn mode with direct PID control without dps_limit. &rarr; Recommend using Position closed-loop1 for PID control</span></li>
   </ul>
 
   <h4>26-02-09 (v9)</h4>
   <ul>
-    <li><code>0x9C</code> (Read Motor Status 2) 추가 &mdash; 모터 동작에 영향 없는 상태 읽기 전용 명령. 실시간 모니터링/데이터 로깅용.</li>
-    <li><code>0x9D</code> (Read Motor Status 3) 추가 &mdash; Control Mode + Phase A/B/C 전류 읽기. Inverse Clarke 변환으로 상전류 계산.</li>
-    <li><code>or_limit</code> 안전 리미터 추가 &mdash; 0xA3 대용량 위치 스텝시 과전류 보호 (REDIRECT / RAMP 두 가지 모드)</li>
-    <li>Encoder 14-bit 정규화 &mdash; MT6835 (21-bit) 엔코더를 14-bit (0&ndash;16383) 범위로 정규화. CNT2DEG = 360/16384.</li>
-    <li><code>0xA2</code> Speed Closed-Loop에 <strong>speed_mode</strong> 추가 (DATA[1]) &mdash; DPS 제어(mode=0, 기존)와 eRPM 제어(mode=1, VESC 내장 PID) 두 가지 속도제어 모드 선택 가능. 기존 DATA[1]=0x00으로 전송하던 코드는 변경 없이 DPS 모드로 동작 (하위 호환).</li>
+    <li><code>0x9C</code> (Read Motor Status 2) <span class="ko">추가 &mdash; 모터 동작에 영향 없는 상태 읽기 전용 명령. 실시간 모니터링/데이터 로깅용.</span><span class="en">added &mdash; Read-only status command that does not affect motor operation. For real-time monitoring/data logging.</span></li>
+    <li><code>0x9D</code> (Read Motor Status 3) <span class="ko">추가 &mdash; Control Mode + Phase A/B/C 전류 읽기. Inverse Clarke 변환으로 상전류 계산.</span><span class="en">added &mdash; Read Control Mode + Phase A/B/C currents. Phase currents calculated via Inverse Clarke transform.</span></li>
+    <li><code>or_limit</code> <span class="ko">안전 리미터 추가 &mdash; 0xA3 대용량 위치 스텝시 과전류 보호 (REDIRECT / RAMP 두 가지 모드)</span><span class="en">safety limiter added &mdash; Overcurrent protection for large position steps via 0xA3 (two modes: REDIRECT / RAMP)</span></li>
+    <li><span class="ko">Encoder 14-bit 정규화 &mdash; MT6835 (21-bit) 엔코더를 14-bit (0&ndash;16383) 범위로 정규화. CNT2DEG = 360/16384.</span><span class="en">Encoder 14-bit normalization &mdash; MT6835 (21-bit) encoder normalized to 14-bit (0&ndash;16383) range. CNT2DEG = 360/16384.</span></li>
+    <li><code>0xA2</code> Speed Closed-Loop<span class="ko">에 <strong>speed_mode</strong> 추가 (DATA[1]) &mdash; DPS 제어(mode=0, 기존)와 eRPM 제어(mode=1, VESC 내장 PID) 두 가지 속도제어 모드 선택 가능. 기존 DATA[1]=0x00으로 전송하던 코드는 변경 없이 DPS 모드로 동작 (하위 호환).</span><span class="en">: <strong>speed_mode</strong> added (DATA[1]) &mdash; Two speed control modes selectable: DPS control (mode=0, existing) and eRPM control (mode=1, VESC built-in PID). Existing code sending DATA[1]=0x00 works as DPS mode without changes (backward compatible).</span></li>
   </ul>
 
   <h4>26-02-11 (v10)</h4>
   <ul>
-    <li><strong>VESC EID Protocol 섹션 추가</strong> &mdash; CAN Extended ID를 통한 VESC 명령 프로토콜 (MCCONF 읽기/쓰기, 리부트, 펌웨어 업로드) 문서화</li>
-    <li><strong>Encoder native resolution</strong> &mdash; AS5047 (14-bit, 16384 CPR) / MT6835 (21-bit, 2097152 CPR) 네이티브 해상도 지원. CAN SID 프레임에서는 14-bit로 정규화하여 전송 (하위 호환). <code>uint64_t</code> 캐스트로 오버플로 방지.</li>
-    <li><strong>COMM_REBOOT 버그 수정</strong> &mdash; IWDG 리셋 후 CAN 초기화 전 fault broadcast로 인한 HardFault 수정. <code>comm_can_is_ready()</code> 가드 추가.</li>
-    <li><strong>CAN 펌웨어/부트로더 업로드</strong> &mdash; VESC EID를 통한 펌웨어 및 부트로더 바이너리 업로드 지원</li>
-    <li><strong>Position/Speed PID via MCCONF</strong> &mdash; VESC EID로 Position PID (Kp/Ki/Kd/Kd Filter) 및 Speed PID (Kp/Ki/Kd/Kd Filter/Ramp) 직접 읽기/쓰기</li>
+    <li><strong><span class="ko">VESC EID Protocol 섹션 추가</span><span class="en">VESC EID Protocol section added</span></strong> &mdash; <span class="ko">CAN Extended ID를 통한 VESC 명령 프로토콜 (MCCONF 읽기/쓰기, 리부트, 펌웨어 업로드) 문서화</span><span class="en">Documentation of VESC command protocol via CAN Extended ID (MCCONF read/write, reboot, firmware upload)</span></li>
+    <li><strong>Encoder native resolution</strong> &mdash; <span class="ko">AS5047 (14-bit, 16384 CPR) / MT6835 (21-bit, 2097152 CPR) 네이티브 해상도 지원. CAN SID 프레임에서는 14-bit로 정규화하여 전송 (하위 호환). <code>uint64_t</code> 캐스트로 오버플로 방지.</span><span class="en">AS5047 (14-bit, 16384 CPR) / MT6835 (21-bit, 2097152 CPR) native resolution support. CAN SID frames normalized to 14-bit for transmission (backward compatible). <code>uint64_t</code> cast to prevent overflow.</span></li>
+    <li><strong><span class="ko">COMM_REBOOT 버그 수정</span><span class="en">COMM_REBOOT bug fix</span></strong> &mdash; <span class="ko">IWDG 리셋 후 CAN 초기화 전 fault broadcast로 인한 HardFault 수정. <code>comm_can_is_ready()</code> 가드 추가.</span><span class="en">Fixed HardFault caused by fault broadcast before CAN initialization after IWDG reset. Added <code>comm_can_is_ready()</code> guard.</span></li>
+    <li><strong><span class="ko">CAN 펌웨어/부트로더 업로드</span><span class="en">CAN firmware/bootloader upload</span></strong> &mdash; <span class="ko">VESC EID를 통한 펌웨어 및 부트로더 바이너리 업로드 지원</span><span class="en">Firmware and bootloader binary upload support via VESC EID</span></li>
+    <li><strong>Position/Speed PID via MCCONF</strong> &mdash; <span class="ko">VESC EID로 Position PID (Kp/Ki/Kd/Kd Filter) 및 Speed PID (Kp/Ki/Kd/Kd Filter/Ramp) 직접 읽기/쓰기</span><span class="en">Direct read/write of Position PID (Kp/Ki/Kd/Kd Filter) and Speed PID (Kp/Ki/Kd/Kd Filter/Ramp) via VESC EID</span></li>
   </ul>
 </div>
 
@@ -409,7 +421,7 @@
 </table>
 
 <h3>Motor Status Response Format <span class="new-badge">NEW in v9</span></h3>
-<p class="cmd-desc">공통 응답 포맷 &mdash; <code>0xA1</code>~<code>0xA4</code>, <code>0x9C</code> 명령에 공통 적용</p>
+<p class="cmd-desc"><span class="ko">공통 응답 포맷 &mdash; <code>0xA1</code>~<code>0xA4</code>, <code>0x9C</code> 명령에 공통 적용</span><span class="en">Common response format &mdash; applied to commands <code>0xA1</code>~<code>0xA4</code>, <code>0x9C</code></span></p>
 
 <table>
   <tr>
@@ -530,8 +542,8 @@
 </table>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  모터 Position Control 시 사용하는 PID Gain 값으로 RMD x6-s2(36:1) 모터의 Default 값은 아래와 같다.<br>
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">모터 Position Control 시 사용하는 PID Gain 값으로 RMD x6-s2(36:1) 모터의 Default 값은 아래와 같다.</span><span class="en">PID Gain values used for motor position control. Default values for the RMD x6-s2 (36:1) motor are as follows:</span><br>
   Kp = 0.02 &nbsp;|&nbsp; Ki = 0.0002 &nbsp;|&nbsp; Kd = 0.0002
 </div>
 
@@ -546,9 +558,9 @@
 <div class="warning">Do NOT send faster than 100Hz (EEPROM write latency).</div>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  모터 Position Control 시 사용하는 PID Gain 값을 모터제어기 Microprocessor의 EEPROM에 저장한다. 저장된 값은 전원이 꺼진 이후에도 사라지지 않고 유지된다. 다만, Firmware를 VESC-Tool로 업데이트한 경우 EEPROM 값이 초기화된다.<br>
-  <strong>주의:</strong> EEPROM의 경우, 저장하는데 소요되는 시간이 있어 본 명령을 100Hz 이상 빠르게 반복해서 보내는 것은 지양해야 한다.
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">모터 Position Control 시 사용하는 PID Gain 값을 모터제어기 Microprocessor의 EEPROM에 저장한다. 저장된 값은 전원이 꺼진 이후에도 사라지지 않고 유지된다. 다만, Firmware를 VESC-Tool로 업데이트한 경우 EEPROM 값이 초기화된다.</span><span class="en">Stores the PID Gain values used for motor position control to the motor controller's microprocessor EEPROM. Stored values persist even after power off. However, EEPROM values are reset when firmware is updated via VESC-Tool.</span><br>
+  <strong><span class="ko">주의:</span><span class="en">Caution:</span></strong> <span class="ko">EEPROM의 경우, 저장하는데 소요되는 시간이 있어 본 명령을 100Hz 이상 빠르게 반복해서 보내는 것은 지양해야 한다.</span><span class="en">EEPROM requires time to write, so avoid sending this command repeatedly at rates faster than 100Hz.</span>
 </div>
 
 <!-- 0x90 -->
@@ -568,9 +580,9 @@
 </table>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  모터 엔코더 데이터로 Magnetic 엔코더의 결과값에 해당한다. Magnetic 엔코더의 특성상 Encoder original position 값은 0~360도 값이 출력된다. Encoder offset 값은 사용자가 지정한 offset값으로 0~360도 값에 해당한다. Encoder Position 값은 Encoder original position에서 Encoder offset 값을 뺀 값이다.<br><br>
-  <strong>예시:</strong> Encoder offset = 100도이고 Encoder original position이 260도이면 Encoder position은 160도가 출력된다. 이 경우, Encoder original position이 0~360도 범위에서 값을 가지고 Encoder offset = 100도 이기 때문에 Encoder position 값은 -100~260도 범위를 가짐을 유념해야한다.
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">모터 엔코더 데이터로 Magnetic 엔코더의 결과값에 해당한다. Magnetic 엔코더의 특성상 Encoder original position 값은 0~360도 값이 출력된다. Encoder offset 값은 사용자가 지정한 offset값으로 0~360도 값에 해당한다. Encoder Position 값은 Encoder original position에서 Encoder offset 값을 뺀 값이다.</span><span class="en">This is the motor encoder data corresponding to the magnetic encoder output. Due to the nature of the magnetic encoder, the Encoder original position outputs values from 0 to 360 degrees. The Encoder offset value is the user-specified offset within the 0~360 degree range. Encoder Position is the Encoder original position minus the Encoder offset.</span><br><br>
+  <strong><span class="ko">예시:</span><span class="en">Example:</span></strong> <span class="ko">Encoder offset = 100도이고 Encoder original position이 260도이면 Encoder position은 160도가 출력된다. 이 경우, Encoder original position이 0~360도 범위에서 값을 가지고 Encoder offset = 100도 이기 때문에 Encoder position 값은 -100~260도 범위를 가짐을 유념해야한다.</span><span class="en">If Encoder offset = 100 degrees and Encoder original position is 260 degrees, then Encoder position outputs 160 degrees. Note that since Encoder original position ranges from 0~360 degrees and Encoder offset = 100 degrees, the Encoder position value ranges from -100~260 degrees.</span>
 </div>
 
 <!-- 0x91 -->
@@ -583,9 +595,9 @@
 <div class="warning">Do NOT send faster than 100Hz.</div>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  Encoder offset 값은 사용자가 지정한 offset 값으로 DEG 값으로 0~360 범위에 있고 EEPROM에 저장되며 전원이 나가도 유지된다. VESC-Tool로 펌웨어를 업데이트한 경우 EEPROM이 초기화 된다. 다만, 펌웨어 업데이트를 VESC-Tool이 아닌 ST-Link로 JTAG Port를 통해서 하면 EEPROM 값이 유지된다.<br>
-  <strong>주의:</strong> EEPROM의 경우, 저장하는데 소요되는 시간이 있어 본 명령을 100Hz 이상 빠르게 반복해서 보내는 것은 지양해야 한다.
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">Encoder offset 값은 사용자가 지정한 offset 값으로 DEG 값으로 0~360 범위에 있고 EEPROM에 저장되며 전원이 나가도 유지된다. VESC-Tool로 펌웨어를 업데이트한 경우 EEPROM이 초기화 된다. 다만, 펌웨어 업데이트를 VESC-Tool이 아닌 ST-Link로 JTAG Port를 통해서 하면 EEPROM 값이 유지된다.</span><span class="en">The Encoder offset is a user-specified offset value in DEG within the 0~360 range, stored in EEPROM and persists even after power off. EEPROM is reset when firmware is updated via VESC-Tool. However, if firmware is updated via ST-Link through the JTAG port instead of VESC-Tool, EEPROM values are preserved.</span><br>
+  <strong><span class="ko">주의:</span><span class="en">Caution:</span></strong> <span class="ko">EEPROM의 경우, 저장하는데 소요되는 시간이 있어 본 명령을 100Hz 이상 빠르게 반복해서 보내는 것은 지양해야 한다.</span><span class="en">EEPROM requires time to write, so avoid sending this command repeatedly at rates faster than 100Hz.</span>
 </div>
 
 <!-- 0x19 -->
@@ -598,9 +610,9 @@
 <div class="warning">Do NOT send faster than 100Hz.</div>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  Encoder offset 값을 지정하여 EEPROM에 저장시킨다. 로봇을 정해진 원점에 위치시키고 본 명령어를 이용하여 그 위치를 Offset으로 지정시키면 Encoder position과 Multi-turn Angle이 그 위치에서 0도가 된다. 본 값은 전원이 꺼진 이후에도 유지되며 단, VESC-Tool을 이용한 펌웨어 업데이트를 하면 초기화된다.<br>
-  <strong>주의:</strong> EEPROM의 경우, 저장하는데 소요되는 시간이 있어 본 명령을 100Hz 이상 빠르게 반복해서 보내는 것은 지양해야 한다.
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">Encoder offset 값을 지정하여 EEPROM에 저장시킨다. 로봇을 정해진 원점에 위치시키고 본 명령어를 이용하여 그 위치를 Offset으로 지정시키면 Encoder position과 Multi-turn Angle이 그 위치에서 0도가 된다. 본 값은 전원이 꺼진 이후에도 유지되며 단, VESC-Tool을 이용한 펌웨어 업데이트를 하면 초기화된다.</span><span class="en">Sets the Encoder offset value and stores it in EEPROM. Position the robot at a designated zero point and use this command to set that position as the Offset, making both Encoder position and Multi-turn Angle 0 degrees at that position. This value persists after power off, but is reset when firmware is updated via VESC-Tool.</span><br>
+  <strong><span class="ko">주의:</span><span class="en">Caution:</span></strong> <span class="ko">EEPROM의 경우, 저장하는데 소요되는 시간이 있어 본 명령을 100Hz 이상 빠르게 반복해서 보내는 것은 지양해야 한다.</span><span class="en">EEPROM requires time to write, so avoid sending this command repeatedly at rates faster than 100Hz.</span>
 </div>
 
 <!-- 0x92 -->
@@ -617,8 +629,8 @@
 </table>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  Encoder 값을 누적시켜 Multi-turn Angle 값을 DEG 값으로 출력한다. 본 값은 Encoder offset 값을 적용하여 계산되며 전원이 꺼진 이후에도 저장된다. 단, VESC-Tool을 이용한 펌웨어 업데이트시 초기화 된다.
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">Encoder 값을 누적시켜 Multi-turn Angle 값을 DEG 값으로 출력한다. 본 값은 Encoder offset 값을 적용하여 계산되며 전원이 꺼진 이후에도 저장된다. 단, VESC-Tool을 이용한 펌웨어 업데이트시 초기화 된다.</span><span class="en">Accumulates encoder values and outputs the Multi-turn Angle in DEG. This value is calculated with the Encoder offset applied and is stored even after power off. However, it is reset when firmware is updated via VESC-Tool.</span>
 </div>
 
 <!-- 0x9C NEW -->
@@ -691,8 +703,8 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 <p><strong>RX:</strong> Echo (all zeros)</p>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  모터제어를 위한 모든 명령을 OFF 상태로 만든다. 모터를 Free 한 상태로 Release 한다.
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">모터제어를 위한 모든 명령을 OFF 상태로 만든다. 모터를 Free 한 상태로 Release 한다.</span><span class="en">Sets all motor control commands to OFF state. Releases the motor to a free state.</span>
 </div>
 
 <!-- 0x81 -->
@@ -704,8 +716,8 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 <p><strong>RX:</strong> Echo (all zeros)</p>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  모터를 SPEED = 0 상태로 제어하여 모터가 멈추도록 한다. 단, 이는 위치제어가 아닌 속도제어를 이용하기 때문에 외력이 크게 가해지면 자기 위치를 유지하지 않고 damping이 큰 상태로 천천히 움직일 수 있다. 그러므로 만약, 모터의 완전한 Position Lock을 하기 원한다면 SET Multiturn POS를 이용해야 한다.
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">모터를 SPEED = 0 상태로 제어하여 모터가 멈추도록 한다. 단, 이는 위치제어가 아닌 속도제어를 이용하기 때문에 외력이 크게 가해지면 자기 위치를 유지하지 않고 damping이 큰 상태로 천천히 움직일 수 있다. 그러므로 만약, 모터의 완전한 Position Lock을 하기 원한다면 SET Multiturn POS를 이용해야 한다.</span><span class="en">Controls the motor at SPEED = 0 to stop it. However, since this uses speed control rather than position control, the motor may slowly move under high damping when large external forces are applied without maintaining its position. Therefore, if you want complete position lock, use SET Multiturn POS.</span>
 </div>
 
 <!-- 0x88 -->
@@ -717,8 +729,8 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 <p><strong>RX:</strong> Echo (all zeros)</p>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  모터를 Duty = 0 상태로 만든다. Duty = 0 상태는 약간의 Damping 이 들어간 상태로 생각하면 된다. RMD 제어 프로토콜을 따라서 만들기는 했으나, OpenRobot MC 제어기에서는 그다지 쓰임새가 없는 제어상태라고 볼 수 있다. 일종의 Brake 상태라고 볼 수는 있다.
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">모터를 Duty = 0 상태로 만든다. Duty = 0 상태는 약간의 Damping 이 들어간 상태로 생각하면 된다. RMD 제어 프로토콜을 따라서 만들기는 했으나, OpenRobot MC 제어기에서는 그다지 쓰임새가 없는 제어상태라고 볼 수 있다. 일종의 Brake 상태라고 볼 수는 있다.</span><span class="en">Sets the motor to Duty = 0 state. Duty = 0 can be considered a state with slight damping applied. Although implemented following the RMD control protocol, this control state has limited practical use in the OpenRobot MC controller. It can be considered a type of brake state.</span>
 </div>
 
 <!-- 0xA1 -->
@@ -740,11 +752,11 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 <p><strong>RX:</strong> Motor Status Response Format</p>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  모터 전류제어 Loop으로 다음 식으로 제어한다.<br>
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">모터 전류제어 Loop으로 다음 식으로 제어한다.</span><span class="en">Controls using the motor current control loop with the following formula:</span><br>
   <code>Current = (Torque current control value) + (Damping Constant value) &times; (motor_speed_rps)</code><br><br>
-  Damping 토크 기능을 추가하였으며 Damping의 크기는 Damping Constant(0~100의 값)로 지정하며 100이 가장 Damping이 크다. RMD x6-s2 (36:1) 모터의 경우, 10정도가 Default 값으로 적당했다.<br>
-  <strong>주의:</strong> Return 데이터중 Encoder position은 offset 값이 적용된 값이다.
+  <span class="ko">Damping 토크 기능을 추가하였으며 Damping의 크기는 Damping Constant(0~100의 값)로 지정하며 100이 가장 Damping이 크다. RMD x6-s2 (36:1) 모터의 경우, 10정도가 Default 값으로 적당했다.</span><span class="en">Damping torque feature has been added. Damping magnitude is set via Damping Constant (value 0~100) where 100 is maximum damping. For the RMD x6-s2 (36:1) motor, a default value of around 10 was appropriate.</span><br>
+  <strong><span class="ko">주의:</span><span class="en">Caution:</span></strong> <span class="ko">Return 데이터중 Encoder position은 offset 값이 적용된 값이다.</span><span class="en">Encoder position in the return data has the offset value applied.</span>
 </div>
 
 <!-- 0xA2 -->
@@ -764,27 +776,27 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 <p style="margin-top: 12px;"><strong>speed_mode values:</strong></p>
 <table>
   <tr><th style="width:60px;">Value</th><th style="width:80px;">Mode</th><th>Control Loop</th><th>Unit</th><th>Description</th></tr>
-  <tr><td>0</td><td>DPS</td><td>OpenRobot custom</td><td>0.01 dps/LSB</td><td>위치제어 기반 사다리꼴 프로파일 속도제어 (기본값)</td></tr>
-  <tr style="background: var(--new-bg);"><td>1</td><td>eRPM</td><td>VESC built-in PID</td><td>1 eRPM/LSB</td><td>VESC 내장 PID 속도제어 루프 (<code>mc_interface_set_pid_speed</code>)</td></tr>
+  <tr><td>0</td><td>DPS</td><td>OpenRobot custom</td><td>0.01 dps/LSB</td><td><span class="ko">위치제어 기반 사다리꼴 프로파일 속도제어 (기본값)</span><span class="en">Position-control-based trapezoidal profile speed control (default)</span></td></tr>
+  <tr style="background: var(--new-bg);"><td>1</td><td>eRPM</td><td>VESC built-in PID</td><td>1 eRPM/LSB</td><td><span class="ko">VESC 내장 PID 속도제어 루프 (<code>mc_interface_set_pid_speed</code>)</span><span class="en">VESC built-in PID speed control loop (<code>mc_interface_set_pid_speed</code>)</span></td></tr>
 </table>
 
-<p><strong>RX:</strong> Motor Status Response Format (동일)</p>
+<p><strong>RX:</strong> Motor Status Response Format <span class="ko">(동일)</span><span class="en">(same)</span></p>
 
 <div class="note-box">
-  <div class="note-title">부연설명 &mdash; Mode 0: DPS 제어 (기본값)</div>
-  모터 속도제어 Loop으로 Degree/sec 속도값을 보낸다. 일명 DPS 제어라고 불리는 제어방식을 사용하며 일반적인 속도제어와는 다르게 위치제어를 기반으로 한 속도제어를 수행한다. 이는 위치제어를 하는 과정에서 위치 목표값을 주어진 속도 reference 를 따라갈 수 있도록 사다리꼴 Profile을 이용하여 제어한다.<br><br>
-  기본적으로 위치제어 상태에서 속도를 제어하기 때문에 매우 저속에서부터 고속까지 정확한 속도제어가 가능하다. 다만, 고속의 속도제어의 경우, 위치제어의 PID Gain 값에 따라 제어 안정성 (Overshoot 등)에 차이가 있는데 RMD x6-s2 (36:1) 모터의 경우 0~8000 DPS 값에 대해서는 안정적으로 작동한다.<br>
-  <strong>주의:</strong> 사다리꼴 Profile에서는 가속도값과 최대 속도값을 지정할 수 있는데 이는 펌웨어 상에 일반적으로 적당한 값으로 세팅되어 있으나 모터에 따라 별도의 튜닝이 필요할 수 있다.
+  <div class="note-title"><span class="ko">부연설명 &mdash; Mode 0: DPS 제어 (기본값)</span><span class="en">Notes &mdash; Mode 0: DPS Control (default)</span></div>
+  <span class="ko">모터 속도제어 Loop으로 Degree/sec 속도값을 보낸다. 일명 DPS 제어라고 불리는 제어방식을 사용하며 일반적인 속도제어와는 다르게 위치제어를 기반으로 한 속도제어를 수행한다. 이는 위치제어를 하는 과정에서 위치 목표값을 주어진 속도 reference 를 따라갈 수 있도록 사다리꼴 Profile을 이용하여 제어한다.</span><span class="en">Sends speed values in Degree/sec to the motor speed control loop. Uses a control method called DPS control, which performs speed control based on position control unlike typical speed control. It controls using a trapezoidal profile so that the position target follows the given speed reference during position control.</span><br><br>
+  <span class="ko">기본적으로 위치제어 상태에서 속도를 제어하기 때문에 매우 저속에서부터 고속까지 정확한 속도제어가 가능하다. 다만, 고속의 속도제어의 경우, 위치제어의 PID Gain 값에 따라 제어 안정성 (Overshoot 등)에 차이가 있는데 RMD x6-s2 (36:1) 모터의 경우 0~8000 DPS 값에 대해서는 안정적으로 작동한다.</span><span class="en">Since speed is controlled in a position control state, precise speed control is possible from very low to high speeds. However, for high-speed control, control stability (overshoot, etc.) varies depending on position control PID Gain values. For the RMD x6-s2 (36:1) motor, it operates stably for 0~8000 DPS values.</span><br>
+  <strong><span class="ko">주의:</span><span class="en">Caution:</span></strong> <span class="ko">사다리꼴 Profile에서는 가속도값과 최대 속도값을 지정할 수 있는데 이는 펌웨어 상에 일반적으로 적당한 값으로 세팅되어 있으나 모터에 따라 별도의 튜닝이 필요할 수 있다.</span><span class="en">The trapezoidal profile allows setting acceleration and maximum speed values, which are generally set to appropriate values in the firmware, but separate tuning may be required depending on the motor.</span>
 </div>
 
 <div class="note-box">
-  <div class="note-title">부연설명 &mdash; Mode 1: eRPM 제어 (VESC 내장) <span class="new-badge">NEW in v9</span></div>
-  VESC에 기본 탑재된 PID 속도제어 루프를 사용한다. eRPM (electrical RPM) 단위로 속도 명령을 보내며, VESC-Tool의 Speed PID 설정(Kp, Ki, Kd 등)에 의해 제어 성능이 결정된다. DPS 모드와 달리 위치제어 기반이 아닌 순수 속도 PID 제어이므로, 고속 영역에서의 응답 특성이 다르다.<br><br>
-  VESC timeout 메커니즘이 적용되므로 주기적으로 명령을 보내거나, 1회 전송 후 유지되도록 설정해야 한다.
+  <div class="note-title"><span class="ko">부연설명 &mdash; Mode 1: eRPM 제어 (VESC 내장)</span><span class="en">Notes &mdash; Mode 1: eRPM Control (VESC built-in)</span> <span class="new-badge">NEW in v9</span></div>
+  <span class="ko">VESC에 기본 탑재된 PID 속도제어 루프를 사용한다. eRPM (electrical RPM) 단위로 속도 명령을 보내며, VESC-Tool의 Speed PID 설정(Kp, Ki, Kd 등)에 의해 제어 성능이 결정된다. DPS 모드와 달리 위치제어 기반이 아닌 순수 속도 PID 제어이므로, 고속 영역에서의 응답 특성이 다르다.</span><span class="en">Uses VESC's built-in PID speed control loop. Speed commands are sent in eRPM (electrical RPM) units, and control performance is determined by VESC-Tool's Speed PID settings (Kp, Ki, Kd, etc.). Unlike DPS mode, this is pure speed PID control rather than position-control-based, so response characteristics differ in the high-speed range.</span><br><br>
+  <span class="ko">VESC timeout 메커니즘이 적용되므로 주기적으로 명령을 보내거나, 1회 전송 후 유지되도록 설정해야 한다.</span><span class="en">VESC timeout mechanism is applied, so commands must be sent periodically or configured to persist after a single transmission.</span>
 </div>
 
 <div class="new-box">
-  <strong>하위 호환:</strong> 기존 DATA[1]=0x00으로 전송하던 코드는 변경 없이 DPS 모드(mode=0)로 동작합니다.
+  <strong><span class="ko">하위 호환:</span><span class="en">Backward compatibility:</span></strong> <span class="ko">기존 DATA[1]=0x00으로 전송하던 코드는 변경 없이 DPS 모드(mode=0)로 동작합니다.</span><span class="en">Existing code sending DATA[1]=0x00 will work as DPS mode (mode=0) without any changes.</span>
 </div>
 
 <!-- 0xA3 -->
@@ -808,9 +820,9 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 </div>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  Encoder offset를 고려한 위치에 대해 Multi-turn 위치제어를 수행한다. DPS_LIMIT 없이 PID제어가 직접적으로 적용되는 방식임.<br><br>
-  <strong>(v8 변경사항)</strong> Set multiturn pos 를 이용한 위치제어가 offset error 가 해결될 수 없는 구조로 되어 있음을 발견, 이를 해결하기위해 Position closed-loop1 을 multiturn 방식으로 바꾸고, dps_limit 없이 직접 PID 제어되도록 수정함. &rarr; PID 제어시에는 Position closed-loop1 을 사용하기를 추천함.
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">Encoder offset를 고려한 위치에 대해 Multi-turn 위치제어를 수행한다. DPS_LIMIT 없이 PID제어가 직접적으로 적용되는 방식임.</span><span class="en">Performs multi-turn position control considering the Encoder offset. Direct PID control is applied without DPS_LIMIT.</span><br><br>
+  <strong><span class="ko">(v8 변경사항)</span><span class="en">(v8 change)</span></strong> <span class="ko">Set multiturn pos 를 이용한 위치제어가 offset error 가 해결될 수 없는 구조로 되어 있음을 발견, 이를 해결하기위해 Position closed-loop1 을 multiturn 방식으로 바꾸고, dps_limit 없이 직접 PID 제어되도록 수정함. &rarr; PID 제어시에는 Position closed-loop1 을 사용하기를 추천함.</span><span class="en">Discovered that position control using Set multiturn pos had an unresolvable offset error structure. To fix this, Position closed-loop1 was changed to multi-turn mode with direct PID control without dps_limit. &rarr; Recommend using Position closed-loop1 for PID control.</span>
 </div>
 
 <!-- 0xA4 -->
@@ -830,10 +842,10 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 <p><strong>RX:</strong> Motor Status Response Format</p>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  Encoder offset를 고려한 위치에 대해 Multi-turn 위치제어를 수행한다. 모터를 초기위치에 놓고 그 위치를 offset 값으로 지정하면 그 위치는 Multi-turn 0도 위치가 된다.<br><br>
-  Multi-turn 위치제어를 하다가 바로 Torque 제어, Speed 제어로 변경이 가능하며 그 반대로 가능하다.<br>
-  <strong>주의:</strong> Multi-turn 위치제어는 한번 명령이 들어가면 위치제어가 계속 유지되며 모터를 풀고자 하면 Motor Off 명령어로 Release를 해야 한다.
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">Encoder offset를 고려한 위치에 대해 Multi-turn 위치제어를 수행한다. 모터를 초기위치에 놓고 그 위치를 offset 값으로 지정하면 그 위치는 Multi-turn 0도 위치가 된다.</span><span class="en">Performs multi-turn position control considering the Encoder offset. Place the motor at the initial position and set that position as the offset value, making it the Multi-turn 0 degree position.</span><br><br>
+  <span class="ko">Multi-turn 위치제어를 하다가 바로 Torque 제어, Speed 제어로 변경이 가능하며 그 반대로 가능하다.</span><span class="en">You can switch directly from Multi-turn position control to Torque control or Speed control, and vice versa.</span><br>
+  <strong><span class="ko">주의:</span><span class="en">Caution:</span></strong> <span class="ko">Multi-turn 위치제어는 한번 명령이 들어가면 위치제어가 계속 유지되며 모터를 풀고자 하면 Motor Off 명령어로 Release를 해야 한다.</span><span class="en">Multi-turn position control maintains position control once a command is received. To release the motor, you must use the Motor Off command.</span>
 </div>
 
 <!-- 0xB0 -->
@@ -850,11 +862,11 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 </table>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  모터제어기 전원인가후 발생한 Fault Code를 최대 7개 값까지 읽을 수 있다. Fault Code 1이 가장 오래된 값이며, Fault Code 7이 가장 최신값이다. 7개 초과된 Fault Code 값은 누락된다.
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <span class="ko">모터제어기 전원인가후 발생한 Fault Code를 최대 7개 값까지 읽을 수 있다. Fault Code 1이 가장 오래된 값이며, Fault Code 7이 가장 최신값이다. 7개 초과된 Fault Code 값은 누락된다.</span><span class="en">Up to 7 fault codes generated after motor controller power-on can be read. Fault Code 1 is the oldest value and Fault Code 7 is the most recent. Fault codes exceeding 7 are discarded.</span>
 </div>
 
-<p style="margin-top:14px;"><strong>Fault Code Table (10진수값):</strong></p>
+<p style="margin-top:14px;"><strong>Fault Code Table (<span class="ko">10진수값</span><span class="en">decimal values</span>):</strong></p>
 <table class="fault-table" style="font-size: 12px;">
   <tr><th style="width:40px;">Code</th><th>Fault</th><th style="width:40px;">Code</th><th>Fault</th></tr>
   <tr><td>0</td><td>NONE</td><td>14</td><td>FLASH_CORRUPTION</td></tr>
@@ -890,12 +902,12 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 </table>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  <strong>1. OC_Mode:</strong> DRV8301칩에서 자체적으로 제공하는 과전류(Over Current) 대처 모드 설정. 기본적으로 이 기능은 전류측정에 부정확하기 때문에 DISABLE(=3)으로 해놓는 것이 좋다.<br>
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <strong>1. OC_Mode:</strong> <span class="ko">DRV8301칩에서 자체적으로 제공하는 과전류(Over Current) 대처 모드 설정. 기본적으로 이 기능은 전류측정에 부정확하기 때문에 DISABLE(=3)으로 해놓는 것이 좋다.</span><span class="en">Overcurrent handling mode provided by the DRV8301 chip. It is recommended to set this to DISABLED (=3) since this feature is inaccurate for current measurement.</span><br>
   <code>DRV8301_OC_LIMIT = 0, DRV8301_OC_LATCH_SHUTDOWN = 1, DRV8301_OC_REPORT_ONLY = 2, DRV8301_OC_DISABLED = 3</code><br><br>
-  <strong>2. Motor Curr. Max:</strong> 모터 전류제어시 제한되는 전류 최대값 (양수로 설정하며 이값의 음수값이 자동으로 Motor Curr. Max Brake 값이 됨), Limit 역할을 하며 Fault Code가 발생하지는 않음<br><br>
-  <strong>3. Motor Curr. Abs Max:</strong> 모터 전류제어시 절대값으로의 최대값으로 이 값이 넘으면 Fault Code 발생<br><br>
-  <strong>4. Bat Curr. Max:</strong> 배터리에서 방전되는 전류의 최대값. PWM Duty가 100%일 때 Batt Curr. = Motor Curr. 인 상황이 되고, 일반적으로 PWM Duty가 낮으면 실제값은 Batt Curr. &lt; Motor Curr. 가 된다.
+  <strong>2. Motor Curr. Max:</strong> <span class="ko">모터 전류제어시 제한되는 전류 최대값 (양수로 설정하며 이값의 음수값이 자동으로 Motor Curr. Max Brake 값이 됨), Limit 역할을 하며 Fault Code가 발생하지는 않음</span><span class="en">Maximum current limit during motor current control (set as positive value; its negative automatically becomes Motor Curr. Max Brake value). Acts as a limit and does not trigger a Fault Code</span><br><br>
+  <strong>3. Motor Curr. Abs Max:</strong> <span class="ko">모터 전류제어시 절대값으로의 최대값으로 이 값이 넘으면 Fault Code 발생</span><span class="en">Absolute maximum current during motor current control. Exceeding this value triggers a Fault Code</span><br><br>
+  <strong>4. Bat Curr. Max:</strong> <span class="ko">배터리에서 방전되는 전류의 최대값. PWM Duty가 100%일 때 Batt Curr. = Motor Curr. 인 상황이 되고, 일반적으로 PWM Duty가 낮으면 실제값은 Batt Curr. &lt; Motor Curr. 가 된다.</span><span class="en">Maximum discharge current from the battery. When PWM Duty is 100%, Batt Curr. = Motor Curr. Generally, when PWM Duty is low, the actual value is Batt Curr. &lt; Motor Curr.</span>
 </div>
 
 <!-- 0xB2 -->
@@ -907,22 +919,22 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 <table>
   <tr><th>Byte</th><th>Field</th><th>Type</th><th>Note</th></tr>
   <tr><td><code>DATA[0]</code></td><td>0xB2</td><td>uint8</td><td>&mdash;</td></tr>
-  <tr><td><code>DATA[1]</code></td><td>OC_Mode</td><td>uint8</td><td>기본값 3 (DISABLED) 권장</td></tr>
-  <tr><td><code>DATA[2-3]</code></td><td>Motor Current Max</td><td>int16</td><td>0.01 A/LSB (예: 2000 = 20A)</td></tr>
-  <tr><td><code>DATA[4-5]</code></td><td>Motor Current Abs Max</td><td>int16</td><td>0.01 A/LSB (예: 15000 = 150A)</td></tr>
-  <tr><td><code>DATA[6-7]</code></td><td>Battery Current Max</td><td>int16</td><td>0.01 A/LSB (예: 9900 = 99A)</td></tr>
+  <tr><td><code>DATA[1]</code></td><td>OC_Mode</td><td>uint8</td><td><span class="ko">기본값 3 (DISABLED) 권장</span><span class="en">Default 3 (DISABLED) recommended</span></td></tr>
+  <tr><td><code>DATA[2-3]</code></td><td>Motor Current Max</td><td>int16</td><td><span class="ko">0.01 A/LSB (예: 2000 = 20A)</span><span class="en">0.01 A/LSB (e.g., 2000 = 20A)</span></td></tr>
+  <tr><td><code>DATA[4-5]</code></td><td>Motor Current Abs Max</td><td>int16</td><td><span class="ko">0.01 A/LSB (예: 15000 = 150A)</span><span class="en">0.01 A/LSB (e.g., 15000 = 150A)</span></td></tr>
+  <tr><td><code>DATA[6-7]</code></td><td>Battery Current Max</td><td>int16</td><td><span class="ko">0.01 A/LSB (예: 9900 = 99A)</span><span class="en">0.01 A/LSB (e.g., 9900 = 99A)</span></td></tr>
 </table>
 
 <p><strong>RX:</strong> Echo of TX</p>
 <div class="warning">Do NOT send faster than 100Hz.</div>
 
 <div class="note-box">
-  <div class="note-title">부연설명</div>
-  <strong>1. OC_Mode:</strong> 기본값으로 이 값을 3으로 해놓는 것이 좋다.<br>
+  <div class="note-title"><span class="ko">부연설명</span><span class="en">Notes</span></div>
+  <strong>1. OC_Mode:</strong> <span class="ko">기본값으로 이 값을 3으로 해놓는 것이 좋다.</span><span class="en">It is recommended to set this value to 3 by default.</span><br>
   <code>DRV8301_OC_LIMIT = 0, DRV8301_OC_LATCH_SHUTDOWN = 1, DRV8301_OC_REPORT_ONLY = 2, DRV8301_OC_DISABLED = 3</code><br><br>
-  <strong>2. Motor Curr. Max:</strong> 모터 전류제어시 제한되는 전류 최대값 (양수로 설정하며 이값의 음수값이 자동으로 Motor Curr. Max Brake 값이 됨)<br><br>
-  <strong>3. Motor Curr. Abs Max:</strong> 모터 전류제어시 절대값으로의 최대값으로 이 값이 넘으면 Fault Code 발생<br><br>
-  <strong>4. Bat Curr. Max:</strong> 배터리에서 방전되는 전류의 최대값. PWM Duty가 100%일 때 Batt Curr. = Motor Curr. 인 상황이 되고, 일반적으로 PWM Duty가 낮으면 실제값은 Batt Curr. &lt; Motor Curr. 가 된다.
+  <strong>2. Motor Curr. Max:</strong> <span class="ko">모터 전류제어시 제한되는 전류 최대값 (양수로 설정하며 이값의 음수값이 자동으로 Motor Curr. Max Brake 값이 됨)</span><span class="en">Maximum current limit during motor current control (set as positive value; its negative automatically becomes Motor Curr. Max Brake value)</span><br><br>
+  <strong>3. Motor Curr. Abs Max:</strong> <span class="ko">모터 전류제어시 절대값으로의 최대값으로 이 값이 넘으면 Fault Code 발생</span><span class="en">Absolute maximum current during motor current control. Exceeding this value triggers a Fault Code</span><br><br>
+  <strong>4. Bat Curr. Max:</strong> <span class="ko">배터리에서 방전되는 전류의 최대값. PWM Duty가 100%일 때 Batt Curr. = Motor Curr. 인 상황이 되고, 일반적으로 PWM Duty가 낮으면 실제값은 Batt Curr. &lt; Motor Curr. 가 된다.</span><span class="en">Maximum discharge current from the battery. When PWM Duty is 100%, Batt Curr. = Motor Curr. Generally, when PWM Duty is low, the actual value is Batt Curr. &lt; Motor Curr.</span>
 </div>
 
 <!-- ============================================================ -->
@@ -1047,7 +1059,7 @@ Without protection, a large position step causes the PID to output maximum curre
 <!-- ============================================================ -->
 <h2>VESC EID Protocol <span class="new-badge">NEW in v10</span></h2>
 
-<p>CAN Extended ID (EID)를 사용하는 VESC 내장 통신 프로토콜. SID 프로토콜과 별도로 동작하며, MCCONF/APPCONF 파라미터 설정, 펌웨어 업로드, 리부트 등에 사용된다.</p>
+<p><span class="ko">CAN Extended ID (EID)를 사용하는 VESC 내장 통신 프로토콜. SID 프로토콜과 별도로 동작하며, MCCONF/APPCONF 파라미터 설정, 펌웨어 업로드, 리부트 등에 사용된다.</span><span class="en">VESC built-in communication protocol using CAN Extended ID (EID). Operates independently of the SID protocol, used for MCCONF/APPCONF parameter configuration, firmware upload, reboot, etc.</span></p>
 
 <h3>EID Frame Format</h3>
 <table class="general-table">
@@ -1059,38 +1071,39 @@ Without protection, a large position step causes the PID to output maximum curre
 </table>
 
 <div class="info">
-  VESC EID는 multi-frame 프로토콜을 사용하여 8바이트 CAN 프레임 제한을 넘는 대용량 데이터를 전송한다.
-  <code>FILL_RX_BUFFER</code> &rarr; <code>PROCESS_RX_BUFFER</code> 순서로 데이터를 분할/재조립한다.
+  <span class="ko">VESC EID는 multi-frame 프로토콜을 사용하여 8바이트 CAN 프레임 제한을 넘는 대용량 데이터를 전송한다.
+  <code>FILL_RX_BUFFER</code> &rarr; <code>PROCESS_RX_BUFFER</code> 순서로 데이터를 분할/재조립한다.</span><span class="en">VESC EID uses a multi-frame protocol to transmit large data exceeding the 8-byte CAN frame limit.
+  Data is split/reassembled in the order of <code>FILL_RX_BUFFER</code> &rarr; <code>PROCESS_RX_BUFFER</code>.</span>
 </div>
 
 <h3>VESC EID Packet Types</h3>
 <table>
   <tr><th>Type</th><th>Value</th><th>Direction</th><th>Description</th></tr>
-  <tr><td><code>CAN_PACKET_FILL_RX_BUFFER</code></td><td>5</td><td>TX/RX</td><td>Multi-frame 데이터 버퍼 채우기</td></tr>
-  <tr><td><code>CAN_PACKET_FILL_RX_BUFFER_LONG</code></td><td>6</td><td>TX/RX</td><td>Long index (16-bit offset) 버퍼 채우기</td></tr>
-  <tr><td><code>CAN_PACKET_PROCESS_RX_BUFFER</code></td><td>7</td><td>TX/RX</td><td>버퍼 처리 명령 (CRC 포함)</td></tr>
-  <tr><td><code>CAN_PACKET_PROCESS_SHORT_BUFFER</code></td><td>8</td><td>TX/RX</td><td>짧은 단일 프레임 명령</td></tr>
+  <tr><td><code>CAN_PACKET_FILL_RX_BUFFER</code></td><td>5</td><td>TX/RX</td><td><span class="ko">Multi-frame 데이터 버퍼 채우기</span><span class="en">Multi-frame data buffer fill</span></td></tr>
+  <tr><td><code>CAN_PACKET_FILL_RX_BUFFER_LONG</code></td><td>6</td><td>TX/RX</td><td><span class="ko">Long index (16-bit offset) 버퍼 채우기</span><span class="en">Long index (16-bit offset) buffer fill</span></td></tr>
+  <tr><td><code>CAN_PACKET_PROCESS_RX_BUFFER</code></td><td>7</td><td>TX/RX</td><td><span class="ko">버퍼 처리 명령 (CRC 포함)</span><span class="en">Buffer process command (includes CRC)</span></td></tr>
+  <tr><td><code>CAN_PACKET_PROCESS_SHORT_BUFFER</code></td><td>8</td><td>TX/RX</td><td><span class="ko">짧은 단일 프레임 명령</span><span class="en">Short single-frame command</span></td></tr>
 </table>
 
-<h3>주요 VESC Commands (CommPacketId)</h3>
+<h3><span class="ko">주요 VESC Commands (CommPacketId)</span><span class="en">Key VESC Commands (CommPacketId)</span></h3>
 <table class="summary-table">
   <tr><th>ID</th><th>Command</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>0</code></td><td>COMM_FW_VERSION</td><td class="type-read">Read</td><td>펌웨어 버전 조회</td></tr>
-  <tr><td><code>14</code></td><td>COMM_GET_MCCONF</td><td class="type-read">Read</td><td>Motor Configuration 읽기 (~457 bytes)</td></tr>
-  <tr><td><code>13</code></td><td>COMM_SET_MCCONF</td><td class="type-write">Write</td><td>Motor Configuration 쓰기</td></tr>
-  <tr><td><code>15</code></td><td>COMM_GET_MCCONF_DEFAULT</td><td class="type-read">Read</td><td>Motor Configuration 기본값 읽기</td></tr>
-  <tr><td><code>17</code></td><td>COMM_GET_APPCONF</td><td class="type-read">Read</td><td>App Configuration 읽기 (~418 bytes)</td></tr>
-  <tr><td><code>16</code></td><td>COMM_SET_APPCONF</td><td class="type-write">Write</td><td>App Configuration 쓰기</td></tr>
-  <tr><td><code>18</code></td><td>COMM_GET_APPCONF_DEFAULT</td><td class="type-read">Read</td><td>App Configuration 기본값 읽기</td></tr>
-  <tr><td><code>28</code></td><td>COMM_REBOOT</td><td class="type-control">Control</td><td>MCU 리부트 (IWDG watchdog 리셋)</td></tr>
-  <tr><td><code>31</code></td><td>COMM_ERASE_NEW_APP</td><td class="type-write">Write</td><td>Staging area 삭제 (펌웨어 업로드 1단계)</td></tr>
-  <tr><td><code>32</code></td><td>COMM_WRITE_NEW_APP_DATA</td><td class="type-write">Write</td><td>Staging area에 바이너리 쓰기 (2단계)</td></tr>
-  <tr><td><code>36</code></td><td>COMM_JUMP_TO_BOOTLOADER</td><td class="type-control">Control</td><td>부트로더로 점프 (3단계)</td></tr>
-  <tr><td><code>46</code></td><td>COMM_ERASE_BOOTLOADER</td><td class="type-write">Write</td><td>부트로더 섹터 삭제 (부트로더 업로드 시)</td></tr>
+  <tr><td><code>0</code></td><td>COMM_FW_VERSION</td><td class="type-read">Read</td><td><span class="ko">펌웨어 버전 조회</span><span class="en">Query firmware version</span></td></tr>
+  <tr><td><code>14</code></td><td>COMM_GET_MCCONF</td><td class="type-read">Read</td><td><span class="ko">Motor Configuration 읽기 (~457 bytes)</span><span class="en">Read Motor Configuration (~457 bytes)</span></td></tr>
+  <tr><td><code>13</code></td><td>COMM_SET_MCCONF</td><td class="type-write">Write</td><td><span class="ko">Motor Configuration 쓰기</span><span class="en">Write Motor Configuration</span></td></tr>
+  <tr><td><code>15</code></td><td>COMM_GET_MCCONF_DEFAULT</td><td class="type-read">Read</td><td><span class="ko">Motor Configuration 기본값 읽기</span><span class="en">Read Motor Configuration defaults</span></td></tr>
+  <tr><td><code>17</code></td><td>COMM_GET_APPCONF</td><td class="type-read">Read</td><td><span class="ko">App Configuration 읽기 (~418 bytes)</span><span class="en">Read App Configuration (~418 bytes)</span></td></tr>
+  <tr><td><code>16</code></td><td>COMM_SET_APPCONF</td><td class="type-write">Write</td><td><span class="ko">App Configuration 쓰기</span><span class="en">Write App Configuration</span></td></tr>
+  <tr><td><code>18</code></td><td>COMM_GET_APPCONF_DEFAULT</td><td class="type-read">Read</td><td><span class="ko">App Configuration 기본값 읽기</span><span class="en">Read App Configuration defaults</span></td></tr>
+  <tr><td><code>28</code></td><td>COMM_REBOOT</td><td class="type-control">Control</td><td><span class="ko">MCU 리부트 (IWDG watchdog 리셋)</span><span class="en">MCU reboot (IWDG watchdog reset)</span></td></tr>
+  <tr><td><code>31</code></td><td>COMM_ERASE_NEW_APP</td><td class="type-write">Write</td><td><span class="ko">Staging area 삭제 (펌웨어 업로드 1단계)</span><span class="en">Erase staging area (firmware upload step 1)</span></td></tr>
+  <tr><td><code>32</code></td><td>COMM_WRITE_NEW_APP_DATA</td><td class="type-write">Write</td><td><span class="ko">Staging area에 바이너리 쓰기 (2단계)</span><span class="en">Write binary to staging area (step 2)</span></td></tr>
+  <tr><td><code>36</code></td><td>COMM_JUMP_TO_BOOTLOADER</td><td class="type-control">Control</td><td><span class="ko">부트로더로 점프 (3단계)</span><span class="en">Jump to bootloader (step 3)</span></td></tr>
+  <tr><td><code>46</code></td><td>COMM_ERASE_BOOTLOADER</td><td class="type-write">Write</td><td><span class="ko">부트로더 섹터 삭제 (부트로더 업로드 시)</span><span class="en">Erase bootloader sector (for bootloader upload)</span></td></tr>
 </table>
 
 <h3>MCCONF PID Offsets</h3>
-<p class="cmd-desc">MCCONF 바이너리 페이로드 내 PID 파라미터 오프셋 (MCCONF_SIGNATURE: <code>0x83C3E1AA</code>). 값은 VESC <code>float32_auto</code> 포맷 (4 bytes Big-Endian).</p>
+<p class="cmd-desc"><span class="ko">MCCONF 바이너리 페이로드 내 PID 파라미터 오프셋 (MCCONF_SIGNATURE: <code>0x83C3E1AA</code>). 값은 VESC <code>float32_auto</code> 포맷 (4 bytes Big-Endian).</span><span class="en">PID parameter offsets within the MCCONF binary payload (MCCONF_SIGNATURE: <code>0x83C3E1AA</code>). Values are in VESC <code>float32_auto</code> format (4 bytes Big-Endian).</span></p>
 
 <table>
   <tr><th>Parameter</th><th>Speed PID Offset</th><th>Position PID Offset</th></tr>
@@ -1102,38 +1115,39 @@ Without protection, a large position step causes the PID to output maximum curre
 </table>
 
 <div class="note-box">
-  <div class="note-title">부연설명 &mdash; MCCONF PID 읽기/쓰기</div>
-  <strong>읽기:</strong> COMM_GET_MCCONF (14)를 전송하면 전체 MCCONF 바이너리(~457 bytes)가 반환됨. 위 오프셋에서 PID 값을 추출.<br>
-  <strong>쓰기:</strong> 읽은 원본 MCCONF를 복사하고, 수정할 PID 값만 해당 오프셋에 패치한 후 COMM_SET_MCCONF (13)로 전송.<br>
-  <strong>주의:</strong> 반드시 원본 MCCONF를 먼저 읽은 후(Read Gains), PID 값만 수정하여 전체를 다시 쓰는 방식을 사용해야 함. 그렇지 않으면 다른 설정값이 손상될 수 있음.
+  <div class="note-title"><span class="ko">부연설명 &mdash; MCCONF PID 읽기/쓰기</span><span class="en">Notes &mdash; MCCONF PID Read/Write</span></div>
+  <strong><span class="ko">읽기:</span><span class="en">Read:</span></strong> <span class="ko">COMM_GET_MCCONF (14)를 전송하면 전체 MCCONF 바이너리(~457 bytes)가 반환됨. 위 오프셋에서 PID 값을 추출.</span><span class="en">Sending COMM_GET_MCCONF (14) returns the entire MCCONF binary (~457 bytes). Extract PID values from the offsets above.</span><br>
+  <strong><span class="ko">쓰기:</span><span class="en">Write:</span></strong> <span class="ko">읽은 원본 MCCONF를 복사하고, 수정할 PID 값만 해당 오프셋에 패치한 후 COMM_SET_MCCONF (13)로 전송.</span><span class="en">Copy the original MCCONF read, patch only the PID values to modify at the corresponding offsets, then send via COMM_SET_MCCONF (13).</span><br>
+  <strong><span class="ko">주의:</span><span class="en">Caution:</span></strong> <span class="ko">반드시 원본 MCCONF를 먼저 읽은 후(Read Gains), PID 값만 수정하여 전체를 다시 쓰는 방식을 사용해야 함. 그렇지 않으면 다른 설정값이 손상될 수 있음.</span><span class="en">You must first read the original MCCONF (Read Gains), modify only the PID values, then write back the entire configuration. Otherwise, other settings may be corrupted.</span>
 </div>
 
 <h3>Firmware Upload via CAN EID</h3>
 
 <div class="note-box">
-  <div class="note-title">부연설명 &mdash; CAN 펌웨어/부트로더 업로드</div>
+  <div class="note-title"><span class="ko">부연설명 &mdash; CAN 펌웨어/부트로더 업로드</span><span class="en">Notes &mdash; CAN Firmware/Bootloader Upload</span></div>
   <strong>Firmware Upload:</strong><br>
-  1. <code>COMM_ERASE_NEW_APP(size)</code> &mdash; Staging area (Flash sectors 8-10) 삭제<br>
-  2. <code>COMM_WRITE_NEW_APP_DATA(offset, data)</code> &mdash; 바이너리 데이터를 400-byte 청크로 분할 전송<br>
-  3. <code>COMM_JUMP_TO_BOOTLOADER</code> &mdash; 부트로더가 staging &rarr; app 영역으로 복사<br><br>
+  1. <code>COMM_ERASE_NEW_APP(size)</code> &mdash; <span class="ko">Staging area (Flash sectors 8-10) 삭제</span><span class="en">Erase staging area (Flash sectors 8-10)</span><br>
+  2. <code>COMM_WRITE_NEW_APP_DATA(offset, data)</code> &mdash; <span class="ko">바이너리 데이터를 400-byte 청크로 분할 전송</span><span class="en">Transmit binary data in 400-byte chunks</span><br>
+  3. <code>COMM_JUMP_TO_BOOTLOADER</code> &mdash; <span class="ko">부트로더가 staging &rarr; app 영역으로 복사</span><span class="en">Bootloader copies staging &rarr; app area</span><br><br>
   <strong>Bootloader Upload:</strong><br>
-  1~2 단계 동일<br>
-  3. <code>COMM_ERASE_BOOTLOADER</code> &mdash; 부트로더 섹터 (Flash sector 11, 128KB) 삭제<br>
-  4. <code>COMM_JUMP_TO_BOOTLOADER</code> &mdash; staging의 부트로더가 sector 11에 자기 자신을 복사<br><br>
-  <strong>주의:</strong> 부트로더 업로드 실패 시 복구 불가 (JTAG 필요). 반드시 안정적인 전원과 CAN 연결 상태에서 수행할 것.
+  <span class="ko">1~2 단계 동일</span><span class="en">Steps 1~2 are the same</span><br>
+  3. <code>COMM_ERASE_BOOTLOADER</code> &mdash; <span class="ko">부트로더 섹터 (Flash sector 11, 128KB) 삭제</span><span class="en">Erase bootloader sector (Flash sector 11, 128KB)</span><br>
+  4. <code>COMM_JUMP_TO_BOOTLOADER</code> &mdash; <span class="ko">staging의 부트로더가 sector 11에 자기 자신을 복사</span><span class="en">Bootloader in staging copies itself to sector 11</span><br><br>
+  <strong><span class="ko">주의:</span><span class="en">Caution:</span></strong> <span class="ko">부트로더 업로드 실패 시 복구 불가 (JTAG 필요). 반드시 안정적인 전원과 CAN 연결 상태에서 수행할 것.</span><span class="en">If bootloader upload fails, recovery is impossible (JTAG required). Always perform with stable power supply and CAN connection.</span>
 </div>
 
 <h3>Encoder Native Resolution <span class="new-badge">NEW in v10</span></h3>
 
 <table>
   <tr><th>Encoder</th><th>Resolution</th><th>CPR</th><th>Note</th></tr>
-  <tr><td>AS5047</td><td>14-bit</td><td>16,384</td><td>CAN SID 프레임과 동일 해상도</td></tr>
-  <tr><td>MT6835</td><td>21-bit</td><td>2,097,152</td><td>CAN SID에서는 14-bit로 정규화하여 전송</td></tr>
+  <tr><td>AS5047</td><td>14-bit</td><td>16,384</td><td><span class="ko">CAN SID 프레임과 동일 해상도</span><span class="en">Same resolution as CAN SID frame</span></td></tr>
+  <tr><td>MT6835</td><td>21-bit</td><td>2,097,152</td><td><span class="ko">CAN SID에서는 14-bit로 정규화하여 전송</span><span class="en">Normalized to 14-bit for CAN SID transmission</span></td></tr>
 </table>
 
 <div class="warning">
-  <strong>Overflow 주의:</strong> MT6835 21-bit 값 &times; 16384 연산 시 uint32_t 오버플로 발생 (45&deg; 이상에서).
-  반드시 <code>uint64_t</code> 캐스트 사용: <code>(uint64_t)val * ENCODER_CPR_AS5047 / cpr</code>
+  <strong><span class="ko">Overflow 주의:</span><span class="en">Overflow Caution:</span></strong> <span class="ko">MT6835 21-bit 값 &times; 16384 연산 시 uint32_t 오버플로 발생 (45&deg; 이상에서).
+  반드시 <code>uint64_t</code> 캐스트 사용: <code>(uint64_t)val * ENCODER_CPR_AS5047 / cpr</code></span><span class="en">uint32_t overflow occurs when computing MT6835 21-bit value &times; 16384 (at angles above 45&deg;).
+  Must use <code>uint64_t</code> cast: <code>(uint64_t)val * ENCODER_CPR_AS5047 / cpr</code></span>
 </div>
 
 <!-- ============================================================ -->
@@ -1151,7 +1165,7 @@ Without protection, a large position step causes the PID to output maximum curre
   <tr>
     <td>v8</td>
     <td>2025-05-15</td>
-    <td><code>0xA3</code> changed to multi-turn direct PID. <code>0xB0</code>/<code>0xB1</code>/<code>0xB2</code> added. All control commands changed to single-shot (1회 전달 후 유지).</td>
+    <td><code>0xA3</code> changed to multi-turn direct PID. <code>0xB0</code>/<code>0xB1</code>/<code>0xB2</code> added. All control commands changed to single-shot (<span class="ko">1회 전달 후 유지</span><span class="en">persists after single transmission</span>).</td>
   </tr>
   <tr>
     <td>v9</td>
@@ -1172,5 +1186,27 @@ Without protection, a large position step causes the PID to output maximum curre
   OpenRobot Motor CAN Protocol &mdash; OpenRobot MC v10 &nbsp;|&nbsp; DRCL / OpenRobot &nbsp;|&nbsp; 2026-02-11
 </div>
 
+<script>
+function toggleLang() {
+  const body = document.body;
+  if (body.classList.contains('lang-ko')) {
+    body.classList.remove('lang-ko');
+    body.classList.add('lang-en');
+    localStorage.setItem('or-lang', 'en');
+  } else {
+    body.classList.remove('lang-en');
+    body.classList.add('lang-ko');
+    localStorage.setItem('or-lang', 'ko');
+  }
+}
+// Restore saved preference (default: Korean)
+(function() {
+  const saved = localStorage.getItem('or-lang');
+  if (saved === 'en') {
+    document.body.classList.remove('lang-ko');
+    document.body.classList.add('lang-en');
+  }
+})();
+</script>
 </body>
 </html>
