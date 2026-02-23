@@ -81,7 +81,7 @@ class CanSpeedAutoTuner(QThread):
     def stop(self):
         self._running = False
 
-    def on_status(self, status: RmdStatus):
+    def on_status(self, motor_id: int, status: RmdStatus):
         """Feed real-time CAN status data during collection."""
         if not self._collecting:
             return

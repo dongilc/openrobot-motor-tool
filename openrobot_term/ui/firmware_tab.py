@@ -1,5 +1,7 @@
 """
 Firmware upload tab — CAN-only via PCAN-USB EID multi-frame protocol.
+
+v2.2: Combined FW+BL upload, config backup/restore checkbox.
 """
 
 import sys
@@ -10,7 +12,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QLineEdit, QProgressBar, QFileDialog, QMessageBox, QTextEdit,
-    QComboBox, QGroupBox, QFrame,
+    QComboBox, QGroupBox, QFrame, QCheckBox,
 )
 from PyQt6.QtGui import QTextCursor
 from PyQt6.QtCore import Qt
@@ -28,6 +30,7 @@ class FirmwareTab(QWidget):
         self._transport = transport
         self.uploader = None
         self.upload_error_flag = False
+        self._discovered_ids: list[int] = []
 
         layout = QVBoxLayout(self)
 
@@ -41,6 +44,7 @@ class FirmwareTab(QWidget):
         self.upload_type_combo = QComboBox()
         self.upload_type_combo.addItem("Firmware", "firmware")
         self.upload_type_combo.addItem("Bootloader", "bootloader")
+        self.upload_type_combo.addItem("Firmware + Bootloader", "combined")
         self.upload_type_combo.currentIndexChanged.connect(self._on_upload_type_changed)
         mode_layout.addWidget(self.upload_type_combo)
 
@@ -51,6 +55,19 @@ class FirmwareTab(QWidget):
         self.can_target_combo = QComboBox()
         self.can_target_combo.addItem("Broadcast (ALL)", 255)
         mode_layout.addWidget(self.can_target_combo)
+
+        mode_layout.addSpacing(20)
+
+        # Config backup/restore checkbox (v2.2)
+        self.config_backup_chk = QCheckBox("Backup && Restore Config")
+        self.config_backup_chk.setChecked(True)
+        self.config_backup_chk.setToolTip(
+            "Read MCCONF/APPCONF before upload, restore after reboot.\n"
+            "Broadcast: backs up all discovered devices, restores each via UUID.\n"
+            "Skipped if config signature changes between firmware versions.\n"
+            "Disabled for Bootloader-only mode."
+        )
+        mode_layout.addWidget(self.config_backup_chk)
 
         mode_layout.addStretch()
 
@@ -166,15 +183,25 @@ class FirmwareTab(QWidget):
         self.log_view.ensureCursorVisible()
 
     def _on_upload_type_changed(self, index):
-        is_bootloader = self.upload_type_combo.currentData() == "bootloader"
-        if is_bootloader:
+        mode = self.upload_type_combo.currentData()
+        if mode == "bootloader":
             self.warning_label.setText(
                 "<span style='color: orange;'>CAN Bootloader upload mode</span>")
             self._set_default_bin_path(DEFAULT_BL_PATH)
+            self.config_backup_chk.setEnabled(False)
+            self.config_backup_chk.setChecked(False)
+        elif mode == "combined":
+            self.warning_label.setText(
+                "<span style='color: orange;'>CAN Firmware + Bootloader upload mode</span>")
+            self._set_default_bin_path(DEFAULT_FW_PATH)
+            self.config_backup_chk.setEnabled(True)
+            self.config_backup_chk.setChecked(True)
         else:
             self.warning_label.setText(
                 "<span style='color: green;'>CAN Firmware upload mode</span>")
             self._set_default_bin_path(DEFAULT_FW_PATH)
+            self.config_backup_chk.setEnabled(True)
+            self.config_backup_chk.setChecked(True)
 
     def _set_default_bin_path(self, relative_path: str):
         """Set bin_edit to the default path relative to the tool's root directory."""
@@ -193,6 +220,14 @@ class FirmwareTab(QWidget):
         if path:
             self.bin_edit.setText(path)
 
+    def _get_bundled_bootloader_path(self) -> str:
+        """Return the path to the bundled bootloader binary."""
+        if getattr(sys, 'frozen', False):
+            base_dir = Path(sys._MEIPASS)
+        else:
+            base_dir = Path(__file__).resolve().parent.parent.parent
+        return str(base_dir / DEFAULT_BL_PATH)
+
     def on_flash_upload(self):
         if not self._transport.is_connected():
             QMessageBox.warning(self, "Not connected", "Open PCAN connection first.")
@@ -206,12 +241,46 @@ class FirmwareTab(QWidget):
             QMessageBox.warning(self, "BIN not found", f"File not found:\n{bin_path}")
             return
 
-        is_bootloader = self.upload_type_combo.currentData() == "bootloader"
-        type_str = "bootloader" if is_bootloader else "firmware"
+        mode = self.upload_type_combo.currentData()
+        is_bootloader = mode == "bootloader"
+        is_combined = mode == "combined"
         target_id = self.can_target_combo.currentData()
         target_str = "ALL controllers (broadcast)" if target_id == 255 else f"controller ID {target_id}"
 
-        if is_bootloader:
+        # Resolve bundled bootloader path for combined mode
+        bl_bin_path = ""
+        if is_combined:
+            bl_bin_path = self._get_bundled_bootloader_path()
+            if not Path(bl_bin_path).exists():
+                QMessageBox.warning(
+                    self, "Bootloader not found",
+                    f"Bundled bootloader not found:\n{bl_bin_path}")
+                return
+            type_str = "firmware + bootloader"
+        elif is_bootloader:
+            type_str = "bootloader"
+        else:
+            type_str = "firmware"
+
+        # Confirmation dialogs
+        if is_combined:
+            bl_name = Path(bl_bin_path).name
+            fw_name = Path(bin_path).name
+            reply = QMessageBox.warning(
+                self,
+                "Combined Upload Warning",
+                f"You are about to upload BOOTLOADER + FIRMWARE to {target_str}.\n\n"
+                f"Bootloader: {bl_name} (bundled)\n"
+                f"Firmware: {fw_name}\n\n"
+                "Phase 1: Bootloader → sector 11\n"
+                "Phase 2: Firmware → staging → app\n\n"
+                "WARNING: A corrupted bootloader may brick the device!\n"
+                "Recovery requires SWD/JTAG programmer.\n\n"
+                "Are you absolutely sure?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+        elif is_bootloader:
             reply = QMessageBox.warning(
                 self,
                 "Bootloader Upload Warning",
@@ -254,19 +323,31 @@ class FirmwareTab(QWidget):
 
         self.log(f"[INFO] Starting {type_str} upload (CAN)...")
         self.log(f"[INFO] File: {bin_path}")
+        if is_combined:
+            self.log(f"[INFO] Bootloader: {bl_bin_path} (bundled)")
         self.log(f"[INFO] Target: {target_str}")
 
         self.cancel_btn.setEnabled(True)
         self.flash_btn.setEnabled(False)
 
+        # Config backup option (disabled for bootloader-only and broadcast)
+        want_config_backup = (self.config_backup_chk.isChecked()
+                              and not is_bootloader)
+        if want_config_backup:
+            self.log(f"[INFO] Config backup/restore enabled")
+
         # Create and start CAN uploader
         self.uploader = CanFirmwareUploader(
             self._transport, bin_path, target_id=target_id,
-            bootloader_mode=is_bootloader)
+            bootloader_mode=is_bootloader,
+            combined_mode=is_combined, bl_bin_path=bl_bin_path,
+            config_backup=want_config_backup,
+            discovered_ids=self._discovered_ids)
         self.uploader.log.connect(self.log)
         self.uploader.progress.connect(self._on_progress)
         self.uploader.finished_ok.connect(self._on_finished)
         self.uploader.aborted.connect(self._on_aborted)
+        self.uploader.config_restore_skipped.connect(self._on_config_restore_skipped)
         self.uploader.start()
 
     def _on_progress(self, percent: int):
@@ -280,8 +361,13 @@ class FirmwareTab(QWidget):
             self.status_label.setText("Cancelling...")
 
     def _on_finished(self):
-        is_bootloader = self.upload_type_combo.currentData() == "bootloader"
-        type_str = "Bootloader" if is_bootloader else "Firmware"
+        mode = self.upload_type_combo.currentData()
+        if mode == "combined":
+            type_str = "Firmware + Bootloader"
+        elif mode == "bootloader":
+            type_str = "Bootloader"
+        else:
+            type_str = "Firmware"
 
         self.log(f"[INFO] {type_str} upload finished successfully!")
         self.status_label.setText(f"{type_str} upload complete!")
@@ -298,6 +384,7 @@ class FirmwareTab(QWidget):
 
     def update_can_targets(self, ids: list[int]):
         """Update CAN target dropdown with discovered IDs from scan."""
+        self._discovered_ids = list(ids)
         current_data = self.can_target_combo.currentData()
         self.can_target_combo.blockSignals(True)
         self.can_target_combo.clear()
@@ -310,6 +397,18 @@ class FirmwareTab(QWidget):
                 self.can_target_combo.setCurrentIndex(i)
                 break
         self.can_target_combo.blockSignals(False)
+
+    def _on_config_restore_skipped(self, reason: str):
+        """Show warning when config restore was skipped (signature mismatch, timeout, etc.)."""
+        self.log(f"[WARNING] Config restore skipped: {reason}")
+        QMessageBox.warning(
+            self,
+            "Config Restore Skipped",
+            f"Configuration was NOT restored after firmware update.\n\n"
+            f"Reason: {reason}\n\n"
+            "The device is using default configuration.\n"
+            "You may need to reconfigure MCCONF/APPCONF manually."
+        )
 
     def _on_aborted(self, reason: str):
         self.log(reason)

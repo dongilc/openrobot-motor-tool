@@ -526,7 +526,7 @@ class CanPositionTuningTab(QWidget):
 
     # ── CAN Data Ingestion ──────────────────────────────────────────
 
-    def _on_status(self, status: RmdStatus):
+    def _on_status(self, motor_id: int, status: RmdStatus):
         """Receive CAN motor status during data collection."""
         # Always track last encoder position (for safety checks)
         self._last_enc_pos_raw = status.enc_pos

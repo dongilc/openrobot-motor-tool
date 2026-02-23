@@ -32,7 +32,7 @@ from ..protocol.can_commands import (
     build_motor_off,
 )
 from ..workers.can_poller import CanPoller
-from .plot_style import style_plot, graph_pen, style_legend, set_curve_visible
+from .plot_style import style_plot, graph_pen, style_legend, set_curve_visible, GRAPH_COLORS
 
 RENDER_INTERVAL_MS = 33  # ~30 fps
 BUF_CAP = 12000
@@ -89,9 +89,51 @@ class _GrowBuffer:
             self._len = keep
 
 
+class _DeviceBuffers:
+    """Complete buffer set for one motor device."""
+
+    def __init__(self):
+        self.time = _GrowBuffer(BUF_CAP)
+        self.mode = _GrowBuffer(BUF_CAP)
+        self.torque = _GrowBuffer(BUF_CAP)
+        self.torque_cmd = _GrowBuffer(BUF_CAP)
+        self.speed = _GrowBuffer(BUF_CAP)
+        self.pos = _GrowBuffer(BUF_CAP)
+        self.phase_a = _GrowBuffer(BUF_CAP)
+        self.phase_b = _GrowBuffer(BUF_CAP)
+        self.phase_c = _GrowBuffer(BUF_CAP)
+        self.temp = _GrowBuffer(BUF_CAP)
+        self.pos_cmd = _GrowBuffer(BUF_CAP)
+        # Position unwrapping state
+        self.prev_enc_pos = None
+        self.enc_offset = 0.0
+        # Per-device status3 (0x9D)
+        self.last_status3 = None
+
+    def all_buffers(self) -> list[_GrowBuffer]:
+        return [
+            self.time, self.mode, self.torque, self.torque_cmd,
+            self.speed, self.pos, self.phase_a, self.phase_b,
+            self.phase_c, self.temp, self.pos_cmd,
+        ]
+
+    def clear(self):
+        for rb in self.all_buffers():
+            rb.clear()
+        self.prev_enc_pos = None
+        self.enc_offset = 0.0
+        self.last_status3 = None
+
+    def compact(self, keep: int):
+        for rb in self.all_buffers():
+            rb.compact(keep)
+
+
 # ── CAN Data Tab ──
 
 class CanDataTab(QWidget):
+    rescan_requested = pyqtSignal()  # request connection_bar to re-scan before polling
+
     def __init__(self, can_transport: PcanTransport):
         super().__init__()
         self._transport = can_transport
@@ -102,6 +144,7 @@ class CanDataTab(QWidget):
         self._csv_file = None
         self._csv_writer = None
         self._polling = False
+        self._pending_poll_start = False  # waiting for re-scan before polling
         self._auto_range = True
         self._x_window = 10.0
         self._dirty = False
@@ -110,30 +153,15 @@ class CanDataTab(QWidget):
 
         self._last_torque_cmd = 0.0
         self._last_pos_cmd = float('nan')
-        self._prev_enc_pos = None
-        self._enc_offset = 0.0
         self._mt_init_angle = None  # multiturn angle read at polling start
-        self._last_status3 = None   # latest 0x9D data
         self._discovered_ids: list[int] = []  # populated by CAN scan
 
-        # Buffers
-        self._rb_time = _GrowBuffer(BUF_CAP)
-        self._rb_mode = _GrowBuffer(BUF_CAP)
-        self._rb_torque = _GrowBuffer(BUF_CAP)
-        self._rb_torque_cmd = _GrowBuffer(BUF_CAP)
-        self._rb_speed = _GrowBuffer(BUF_CAP)
-        self._rb_pos = _GrowBuffer(BUF_CAP)
-        self._rb_phase_a = _GrowBuffer(BUF_CAP)
-        self._rb_phase_b = _GrowBuffer(BUF_CAP)
-        self._rb_phase_c = _GrowBuffer(BUF_CAP)
-        self._rb_temp = _GrowBuffer(BUF_CAP)
-        self._rb_pos_cmd = _GrowBuffer(BUF_CAP)
-        self._all_rbs = [
-            self._rb_time, self._rb_mode, self._rb_torque,
-            self._rb_torque_cmd, self._rb_speed, self._rb_pos,
-            self._rb_phase_a, self._rb_phase_b, self._rb_phase_c,
-            self._rb_temp, self._rb_pos_cmd,
-        ]
+        # Per-device buffers: {motor_id: _DeviceBuffers}
+        self._dev_buffers: dict[int, _DeviceBuffers] = {}
+
+        # Overlay mode: dynamically created curves {motor_id: {curve_key: PlotDataItem}}
+        self._overlay_curves: dict[int, dict[str, pg.PlotDataItem]] = {}
+        self._overlay_active = False  # True when currently in overlay mode
 
         self._build_ui()
 
@@ -366,6 +394,18 @@ class CanDataTab(QWidget):
         self.pole_spin.setValue(21)
         self.pole_spin.setToolTip("Motor pole pairs (for eRPM calculation)")
         ctrl.addWidget(self.pole_spin)
+
+        ctrl.addSpacing(16)
+        ctrl.addWidget(QLabel("Graph Device:"))
+        self._graph_device_combo = QComboBox()
+        self._graph_device_combo.setMinimumWidth(80)
+        self._graph_device_combo.addItem("All", "all")
+        self._graph_device_combo.setToolTip(
+            "All: overlay main curves from all devices\n"
+            "Specific ID: full detail view for one device"
+        )
+        self._graph_device_combo.currentIndexChanged.connect(self._on_graph_device_changed)
+        ctrl.addWidget(self._graph_device_combo)
 
         ctrl.addStretch()
 
@@ -615,6 +655,27 @@ class CanDataTab(QWidget):
     def update_discovered_ids(self, ids: list[int]):
         """Called from main_window when CAN scan finds motor IDs."""
         self._discovered_ids = list(ids)
+        # Refresh Graph Device combo
+        prev = self._graph_device_combo.currentData()
+        self._graph_device_combo.blockSignals(True)
+        self._graph_device_combo.clear()
+        self._graph_device_combo.addItem("All", "all")
+        for mid in sorted(ids):
+            self._graph_device_combo.addItem(f"ID {mid}", mid)
+        # Restore previous selection if still valid
+        for i in range(self._graph_device_combo.count()):
+            if self._graph_device_combo.itemData(i) == prev:
+                self._graph_device_combo.setCurrentIndex(i)
+                break
+        self._graph_device_combo.blockSignals(False)
+        self._dirty = True
+        # Update running poller if active
+        if self._poller and self._polling:
+            self._poller.set_motor_ids(self._discovered_ids)
+        # If polling start was pending on re-scan, start now with fresh IDs
+        if self._pending_poll_start:
+            self._pending_poll_start = False
+            self._do_start_polling()
 
     def _write_encoder_offset(self):
         if not self._transport.is_connected():
@@ -736,50 +797,69 @@ class CanDataTab(QWidget):
         if self._mt_init_angle is None:
             self._mt_init_angle = angle_deg
 
-    def _on_status3(self, status3: RmdStatus3):
-        """Store latest 0x9D data (control mode + phase currents)."""
-        self._last_status3 = status3
+    def _get_or_create_buffers(self, motor_id: int) -> _DeviceBuffers:
+        """Get existing or create new buffer set for a motor ID."""
+        bufs = self._dev_buffers.get(motor_id)
+        if bufs is None:
+            bufs = _DeviceBuffers()
+            self._dev_buffers[motor_id] = bufs
+            # Auto-add to combo if not present
+            found = False
+            for i in range(self._graph_device_combo.count()):
+                if self._graph_device_combo.itemData(i) == motor_id:
+                    found = True
+                    break
+            if not found:
+                self._graph_device_combo.addItem(f"ID {motor_id}", motor_id)
+        return bufs
 
-    def _on_status(self, status: RmdStatus):
+    def _on_status3(self, motor_id: int, status3: RmdStatus3):
+        """Store latest 0x9D data (control mode + phase currents) per device."""
+        bufs = self._get_or_create_buffers(motor_id)
+        bufs.last_status3 = status3
+
+    def _on_status(self, motor_id: int, status: RmdStatus):
         if self._t0 is None:
             self._t0 = time.time()
 
+        bufs = self._get_or_create_buffers(motor_id)
+
         t = time.time() - self._t0
-        self._rb_time.append(t)
-        self._rb_torque.append(status.torque_curr)
-        self._rb_torque_cmd.append(self._last_torque_cmd)
-        self._rb_speed.append(float(status.speed_dps))
+        bufs.time.append(t)
+        bufs.torque.append(status.torque_curr)
+        bufs.torque_cmd.append(self._last_torque_cmd)
+        bufs.speed.append(float(status.speed_dps))
 
-        # Use latest 0x9D data if available
-        s3 = self._last_status3
+        # Use latest 0x9D data if available (per device)
+        s3 = bufs.last_status3
         if s3 is not None:
-            self._rb_mode.append(float(s3.control_mode))
-            self._rb_phase_a.append(s3.phase_a)
-            self._rb_phase_b.append(s3.phase_b)
-            self._rb_phase_c.append(s3.phase_c)
+            bufs.mode.append(float(s3.control_mode))
+            bufs.phase_a.append(s3.phase_a)
+            bufs.phase_b.append(s3.phase_b)
+            bufs.phase_c.append(s3.phase_c)
         else:
-            self._rb_mode.append(0.0)
-            self._rb_phase_a.append(0.0)
-            self._rb_phase_b.append(0.0)
-            self._rb_phase_c.append(0.0)
+            bufs.mode.append(0.0)
+            bufs.phase_a.append(0.0)
+            bufs.phase_b.append(0.0)
+            bufs.phase_c.append(0.0)
 
-        self._rb_temp.append(float(status.motor_temp))
+        bufs.temp.append(float(status.motor_temp))
 
         # Unwrap encoder position (single-turn → continuous)
         raw_pos = status.enc_pos
-        if self._prev_enc_pos is not None:
-            delta = raw_pos - self._prev_enc_pos
+        if bufs.prev_enc_pos is not None:
+            delta = raw_pos - bufs.prev_enc_pos
             if delta < -180.0:
-                self._enc_offset += 360.0
+                bufs.enc_offset += 360.0
             elif delta > 180.0:
-                self._enc_offset -= 360.0
+                bufs.enc_offset -= 360.0
         else:
             # First sample: calibrate offset from multiturn angle
             if self._mt_init_angle is not None:
-                self._enc_offset = self._mt_init_angle - raw_pos
-        self._prev_enc_pos = raw_pos
-        self._rb_pos.append(raw_pos + self._enc_offset)
-        self._rb_pos_cmd.append(self._last_pos_cmd)
+                bufs.enc_offset = self._mt_init_angle - raw_pos
+        bufs.prev_enc_pos = raw_pos
+        bufs.pos.append(raw_pos + bufs.enc_offset)
+        bufs.pos_cmd.append(self._last_pos_cmd)
 
         self._dirty = True
         self._last_status = status
@@ -792,6 +872,100 @@ class CanDataTab(QWidget):
                 f"{status.speed_dps}", f"{status.enc_pos:.2f}",
             ])
 
+    # ── Graph device mode switching ──
+
+    def _on_graph_device_changed(self, _index: int):
+        """Switch between overlay (All) and single-device modes."""
+        self._dirty = True
+        selected = self._graph_device_combo.currentData()
+        if selected == "all":
+            if not self._overlay_active:
+                self._enter_overlay_mode()
+        else:
+            if self._overlay_active:
+                self._exit_overlay_mode()
+
+    def _enter_overlay_mode(self):
+        """Hide single-device curves, prepare for dynamic overlay curves."""
+        self._overlay_active = True
+        # Hide all static single-device curves
+        for c in self._all_curves:
+            c.setData([], [])
+            c.setVisible(False)
+        self.curve_temp.setData([], [])
+        self.curve_temp.setVisible(False)
+
+    def _exit_overlay_mode(self):
+        """Remove overlay curves, restore single-device static curves."""
+        self._overlay_active = False
+        # Remove all dynamic overlay curves
+        for mid, curve_map in self._overlay_curves.items():
+            for key, curve in curve_map.items():
+                if key == "mode":
+                    self.plot_mode.removeItem(curve)
+                elif key == "torque":
+                    self.plot_torque.removeItem(curve)
+                elif key == "speed":
+                    self.plot_speed.removeItem(curve)
+                elif key == "pos":
+                    self.plot_pos.removeItem(curve)
+        self._overlay_curves.clear()
+        # Remove overlay legend entries — rebuild legends
+        for pw in self._all_plots:
+            legend = pw.plotItem.legend
+            if legend:
+                legend.clear()
+        # Re-add static curves to legends
+        self.plot_mode.plotItem.legend.addItem(self.curve_mode, "Mode")
+        self.plot_mode.plotItem.legend.addItem(self.curve_temp, "Temp(°C)")
+        self.plot_torque.plotItem.legend.addItem(self.curve_torque, "Torque")
+        self.plot_torque.plotItem.legend.addItem(self.curve_torque_cmd, "Torque Cmd")
+        self.plot_torque.plotItem.legend.addItem(self.curve_phase_a, "PhA")
+        self.plot_torque.plotItem.legend.addItem(self.curve_phase_b, "PhB")
+        self.plot_torque.plotItem.legend.addItem(self.curve_phase_c, "PhC")
+        self.plot_speed.plotItem.legend.addItem(self.curve_speed, "dps")
+        self.plot_speed.plotItem.legend.addItem(self.curve_rpm, "RPM")
+        self.plot_speed.plotItem.legend.addItem(self.curve_erpm, "eRPM")
+        self.plot_pos.plotItem.legend.addItem(self.curve_pos, "Position")
+        self.plot_pos.plotItem.legend.addItem(self.curve_pos_cmd, "Pos Cmd")
+        # Show all static curves
+        for c in self._all_curves:
+            c.setVisible(True)
+        self.curve_temp.setVisible(True)
+        # Re-hide phase/RPM/eRPM by default
+        torque_legend = self.plot_torque.plotItem.legend
+        set_curve_visible(torque_legend, self.curve_phase_a, False)
+        set_curve_visible(torque_legend, self.curve_phase_b, False)
+        set_curve_visible(torque_legend, self.curve_phase_c, False)
+        speed_legend = self.plot_speed.plotItem.legend
+        set_curve_visible(speed_legend, self.curve_rpm, False)
+        set_curve_visible(speed_legend, self.curve_erpm, False)
+
+    def _get_overlay_curves(self, motor_id: int, dev_idx: int) -> dict:
+        """Get or create overlay curves for a motor ID."""
+        if motor_id in self._overlay_curves:
+            return self._overlay_curves[motor_id]
+
+        color = GRAPH_COLORS[dev_idx % len(GRAPH_COLORS)]
+        pen = pg.mkPen(color, width=1.5)
+
+        curves = {}
+        curves["mode"] = self.plot_mode.plot(
+            pen=pen, name=f"Mode (ID {motor_id})")
+        curves["torque"] = self.plot_torque.plot(
+            pen=pen, name=f"Torque (ID {motor_id})")
+        curves["speed"] = self.plot_speed.plot(
+            pen=pen, name=f"Speed (ID {motor_id})")
+        curves["pos"] = self.plot_pos.plot(
+            pen=pen, name=f"Pos (ID {motor_id})")
+
+        for c in curves.values():
+            c.setDownsampling(auto=True, method='peak')
+            c.setClipToView(True)
+
+        self._overlay_curves[motor_id] = curves
+        return curves
+
     # ── Rendering ──
 
     def _render_frame(self):
@@ -801,21 +975,26 @@ class CanDataTab(QWidget):
         self._frame_count += 1
 
         try:
-            self._render_frame_inner()
+            selected = self._graph_device_combo.currentData()
+            if selected == "all":
+                self._render_overlay()
+            else:
+                self._render_single(selected)
         except Exception:
             pass  # never let rendering errors crash the app / PCAN
 
-    def _render_frame_inner(self):
-        n = len(self._rb_time)
-        if n == 0:
+    def _render_single(self, motor_id):
+        """Render full detail view for a single device (same as original)."""
+        bufs = self._dev_buffers.get(motor_id)
+        if bufs is None or len(bufs.time) == 0:
             return
 
+        n = len(bufs.time)
         if n > BUF_COMPACT:
-            for rb in self._all_rbs:
-                rb.compact(BUF_CAP)
+            bufs.compact(BUF_CAP)
             n = BUF_CAP
 
-        x_all = self._rb_time.array()
+        x_all = bufs.time.array()
         t_now = x_all[n - 1]
 
         if self._x_window <= 0:
@@ -829,20 +1008,20 @@ class CanDataTab(QWidget):
         if len(x) == 0:
             return
 
-        d_mode = self._rb_mode.array()[s:]
-        d_torque = self._rb_torque.array()[s:]
-        d_torque_cmd = self._rb_torque_cmd.array()[s:]
-        d_speed = self._rb_speed.array()[s:]
-        d_pos = self._rb_pos.array()[s:]
-        d_phase_a = self._rb_phase_a.array()[s:]
-        d_phase_b = self._rb_phase_b.array()[s:]
-        d_phase_c = self._rb_phase_c.array()[s:]
+        d_mode = bufs.mode.array()[s:]
+        d_torque = bufs.torque.array()[s:]
+        d_torque_cmd = bufs.torque_cmd.array()[s:]
+        d_speed = bufs.speed.array()[s:]
+        d_pos = bufs.pos.array()[s:]
+        d_phase_a = bufs.phase_a.array()[s:]
+        d_phase_b = bufs.phase_b.array()[s:]
+        d_phase_c = bufs.phase_c.array()[s:]
 
         d_rpm = d_speed / 6.0
         pp = self.pole_spin.value()
         d_erpm = d_rpm * pp
 
-        d_temp = self._rb_temp.array()[s:]
+        d_temp = bufs.temp.array()[s:]
 
         self.curve_mode.setData(x, d_mode, skipFiniteCheck=True)
         self.curve_temp.setData(x, d_temp, skipFiniteCheck=True)
@@ -854,7 +1033,7 @@ class CanDataTab(QWidget):
         self.curve_speed.setData(x, d_speed, skipFiniteCheck=True)
         self.curve_rpm.setData(x, d_rpm, skipFiniteCheck=True)
         self.curve_erpm.setData(x, d_erpm, skipFiniteCheck=True)
-        d_pos_cmd = self._rb_pos_cmd.array()[s:]
+        d_pos_cmd = bufs.pos_cmd.array()[s:]
         self.curve_pos.setData(x, d_pos, skipFiniteCheck=True)
         self.curve_pos_cmd.setData(x, d_pos_cmd, skipFiniteCheck=True)
 
@@ -862,7 +1041,87 @@ class CanDataTab(QWidget):
             pw.setXRange(t_min, t_now, padding=0)
 
         if self._auto_range:
-            def _yr(a):
+            self._auto_range_single(
+                d_mode, d_temp, d_torque, d_torque_cmd,
+                d_phase_a, d_phase_b, d_phase_c,
+                d_speed, d_rpm, d_erpm, d_pos, d_pos_cmd,
+            )
+
+        # Status bar
+        if (self._frame_count & 7) == 0 and self._last_status:
+            st = self._last_status
+            s3 = bufs.last_status3
+            mode_name = _CONTROL_MODE_NAMES.get(
+                s3.control_mode, f"?({s3.control_mode})") if s3 else "N/A"
+            self.status_label.setText(
+                f"[ID {motor_id}]  Mode={mode_name}  Temp={st.motor_temp:.0f}C  "
+                f"Torque={st.torque_curr:.3f}A  "
+                f"Speed={st.speed_dps}dps  Pos={st.enc_pos:.2f}deg"
+            )
+
+    def _render_overlay(self):
+        """Render overlay: main curves from all devices on each plot."""
+        if not self._dev_buffers:
+            return
+
+        # Find global time range
+        t_now = -1e30
+        t_min_global = 1e30
+        for bufs in self._dev_buffers.values():
+            if len(bufs.time) > 0:
+                arr = bufs.time.array()
+                t_now = max(t_now, arr[-1])
+                t_min_global = min(t_min_global, arr[0])
+        if t_now < 0:
+            return
+
+        if self._x_window > 0:
+            t_min = max(t_min_global, t_now - self._x_window)
+        else:
+            t_min = t_min_global
+
+        # Accumulators for auto-range
+        all_mode, all_torque, all_speed, all_pos = [], [], [], []
+
+        sorted_ids = sorted(self._dev_buffers.keys())
+        for dev_idx, mid in enumerate(sorted_ids):
+            bufs = self._dev_buffers[mid]
+            n = len(bufs.time)
+            if n == 0:
+                continue
+
+            if n > BUF_COMPACT:
+                bufs.compact(BUF_CAP)
+                n = BUF_CAP
+
+            x_all = bufs.time.array()
+            s = int(np.searchsorted(x_all, t_min)) if self._x_window > 0 else 0
+            x = x_all[s:]
+            if len(x) == 0:
+                continue
+
+            d_mode = bufs.mode.array()[s:]
+            d_torque = bufs.torque.array()[s:]
+            d_speed = bufs.speed.array()[s:]
+            d_pos = bufs.pos.array()[s:]
+
+            ov = self._get_overlay_curves(mid, dev_idx)
+            ov["mode"].setData(x, d_mode, skipFiniteCheck=True)
+            ov["torque"].setData(x, d_torque, skipFiniteCheck=True)
+            ov["speed"].setData(x, d_speed, skipFiniteCheck=True)
+            ov["pos"].setData(x, d_pos, skipFiniteCheck=True)
+
+            all_mode.append(d_mode)
+            all_torque.append(d_torque)
+            all_speed.append(d_speed)
+            all_pos.append(d_pos)
+
+        for pw in self._all_plots:
+            pw.setXRange(t_min, t_now, padding=0)
+
+        if self._auto_range and all_mode:
+            def _yr(arrays):
+                a = np.concatenate(arrays) if arrays else np.array([0.0])
                 if len(a) == 0:
                     return -1, 1
                 lo, hi = float(np.nanmin(a)), float(np.nanmax(a))
@@ -873,46 +1132,86 @@ class CanDataTab(QWidget):
                 m = (hi - lo) * 0.05 if hi != lo else 1.0
                 return lo - m, hi + m
 
-            self.plot_mode.setYRange(*_yr(d_mode), padding=0)
-            if len(d_temp) > 0:
-                lo, hi = float(np.nanmin(d_temp)), float(np.nanmax(d_temp))
-                if np.isfinite(lo) and np.isfinite(hi):
-                    m = (hi - lo) * 0.05 if hi != lo else 2.0
-                    self._temp_vb.setYRange(lo - m, hi + m, padding=0)
-            curr_all = np.concatenate([d_torque, d_torque_cmd,
-                                       d_phase_a, d_phase_b, d_phase_c])
-            self.plot_torque.setYRange(*_yr(curr_all), padding=0)
-            speed_all = np.concatenate([d_speed, d_rpm, d_erpm])
-            self.plot_speed.setYRange(*_yr(speed_all), padding=0)
-            valid_cmd = d_pos_cmd[np.isfinite(d_pos_cmd)]
-            if len(valid_cmd) > 0:
-                pos_all = np.concatenate([d_pos, valid_cmd])
-            else:
-                pos_all = d_pos
-            self.plot_pos.setYRange(*_yr(pos_all), padding=0)
+            self.plot_mode.setYRange(*_yr(all_mode), padding=0)
+            self.plot_torque.setYRange(*_yr(all_torque), padding=0)
+            self.plot_speed.setYRange(*_yr(all_speed), padding=0)
+            self.plot_pos.setYRange(*_yr(all_pos), padding=0)
 
-        # Status bar
-        if (self._frame_count & 7) == 0 and self._last_status:
-            s = self._last_status
-            s3 = self._last_status3
-            mode_name = _CONTROL_MODE_NAMES.get(
-                s3.control_mode, f"?({s3.control_mode})") if s3 else "N/A"
+        # Status bar: show device count
+        if (self._frame_count & 7) == 0:
+            n_dev = len(self._dev_buffers)
+            total_pts = sum(len(b.time) for b in self._dev_buffers.values())
             self.status_label.setText(
-                f"Mode={mode_name}  Temp={s.motor_temp:.0f}C  "
-                f"Torque={s.torque_curr:.3f}A  "
-                f"Speed={s.speed_dps}dps  Pos={s.enc_pos:.2f}deg"
+                f"[All]  {n_dev} devices, {total_pts} samples total"
             )
+
+    def _auto_range_single(self, d_mode, d_temp, d_torque, d_torque_cmd,
+                            d_phase_a, d_phase_b, d_phase_c,
+                            d_speed, d_rpm, d_erpm, d_pos, d_pos_cmd):
+        """Auto Y-range for single-device mode."""
+        def _yr(a):
+            if len(a) == 0:
+                return -1, 1
+            lo, hi = float(np.nanmin(a)), float(np.nanmax(a))
+            if not np.isfinite(lo):
+                lo = -1
+            if not np.isfinite(hi):
+                hi = 1
+            m = (hi - lo) * 0.05 if hi != lo else 1.0
+            return lo - m, hi + m
+
+        self.plot_mode.setYRange(*_yr(d_mode), padding=0)
+        if len(d_temp) > 0:
+            lo, hi = float(np.nanmin(d_temp)), float(np.nanmax(d_temp))
+            if np.isfinite(lo) and np.isfinite(hi):
+                m = (hi - lo) * 0.05 if hi != lo else 2.0
+                self._temp_vb.setYRange(lo - m, hi + m, padding=0)
+        curr_all = np.concatenate([d_torque, d_torque_cmd,
+                                   d_phase_a, d_phase_b, d_phase_c])
+        self.plot_torque.setYRange(*_yr(curr_all), padding=0)
+        speed_all = np.concatenate([d_speed, d_rpm, d_erpm])
+        self.plot_speed.setYRange(*_yr(speed_all), padding=0)
+        valid_cmd = d_pos_cmd[np.isfinite(d_pos_cmd)]
+        if len(valid_cmd) > 0:
+            pos_all = np.concatenate([d_pos, valid_cmd])
+        else:
+            pos_all = d_pos
+        self.plot_pos.setYRange(*_yr(pos_all), padding=0)
 
     # ── Polling controls ──
 
     def toggle_polling(self):
-        if self._polling:
+        if self._polling or self._pending_poll_start:
             self.stop_polling()
+            self.start_btn.setEnabled(True)
+            self.start_btn.setText("Start Polling")
         else:
             self.start_polling()
 
     def start_polling(self):
         if not self._transport.is_connected():
+            return
+        if self._polling or self._pending_poll_start:
+            return
+        if not self._discovered_ids:
+            # No IDs known yet — re-scan first, then start polling
+            self._pending_poll_start = True
+            self.start_btn.setEnabled(False)
+            self.start_btn.setText("Scanning...")
+            self.status_label.setText("Status: Scanning for active devices...")
+            self.status_label.setStyleSheet(
+                "font-family: monospace; font-size: 12px; padding: 4px; color: #ffaa00;"
+            )
+            self.rescan_requested.emit()
+        else:
+            # IDs already known from previous scan — start immediately
+            self._do_start_polling()
+
+    def _do_start_polling(self):
+        """Actually start the polling loop (called after re-scan completes)."""
+        self.start_btn.setEnabled(True)
+        if not self._transport.is_connected():
+            self.start_btn.setText("Start Polling")
             return
         if self._polling:
             return
@@ -921,16 +1220,20 @@ class CanDataTab(QWidget):
         self._transport.send_frame(build_read_multi_turn_angle())
         self._t0 = time.time()
         rate_ms = int(1000 / int(self.rate_combo.currentText().replace(" Hz", "")))
-        self._poller = CanPoller(self._transport, rate_ms)
+        self._poller = CanPoller(self._transport, rate_ms,
+                                 motor_ids=self._discovered_ids)
         self._poller.start()
         self._polling = True
         self.start_btn.setText("Stop Polling")
-        self.status_label.setText("Status: Polling started...")
+        n = len(self._discovered_ids)
+        id_str = ", ".join(str(i) for i in self._discovered_ids) if n else "single target"
+        self.status_label.setText(f"Status: Polling {n} device(s) [{id_str}]")
         self.status_label.setStyleSheet(
             "font-family: monospace; font-size: 12px; padding: 4px; color: #66ff66;"
         )
 
     def stop_polling(self):
+        self._pending_poll_start = False
         if self._poller:
             self._poller.stop()
             # Non-blocking wait: keep Qt event loop alive so queued signals
@@ -995,13 +1298,10 @@ class CanDataTab(QWidget):
                 self._csv_writer = None
 
     def clear_data(self):
-        for rb in self._all_rbs:
-            rb.clear()
+        for bufs in self._dev_buffers.values():
+            bufs.clear()
         self._t0 = time.time() if self._polling else None
-        self._prev_enc_pos = None
-        self._enc_offset = 0.0
         self._mt_init_angle = None
-        self._last_status3 = None
         self._last_pos_cmd = float('nan')
         self._dirty = True
 

@@ -37,7 +37,7 @@ class RmdCommand(IntEnum):
     SPEED_CLOSED_LOOP = 0xA2
     POSITION_CLOSED_LOOP_1 = 0xA3
     SET_MULTITURN_POSITION = 0xA4
-    POSITION_CLOSED_LOOP_3 = 0xA5
+    DUTY_CLOSED_LOOP = 0xA5
     POSITION_CLOSED_LOOP_4 = 0xA6
     READ_MULTITURN_ENCODER_POSITION = 0x60
     READ_MULTITURN_ORIGINAL_ENCODER_POSITION = 0x61
@@ -45,6 +45,10 @@ class RmdCommand(IntEnum):
     READ_FAULT_CODE = 0xB0
     READ_MAX_CURRENT = 0xB1
     WRITE_MAX_CURRENT_TO_ROM = 0xB2
+    MIT_CONTROL = 0xC0
+    MIT_ENTER_MOTOR_MODE = 0xC1
+    MIT_EXIT_MOTOR_MODE = 0xC2
+    MIT_SET_ZERO_POS = 0xC3
 
 
 # Fault broadcast marker (sent by firmware on fault, SID = 0x140 + motor_id)
@@ -64,6 +68,8 @@ STATUS_RETURN_COMMANDS = frozenset({
     RmdCommand.SPEED_CLOSED_LOOP,
     RmdCommand.POSITION_CLOSED_LOOP_1,
     RmdCommand.SET_MULTITURN_POSITION,
+    RmdCommand.DUTY_CLOSED_LOOP,
+    RmdCommand.MIT_CONTROL,
 })
 
 
@@ -287,6 +293,60 @@ def build_write_max_current_to_rom(oc_mode: int, motor_max: float,
                   b & 0xFF, (b >> 8) & 0xFF])
 
 
+def build_duty_closed_loop(duty: float) -> bytes:
+    """RMD duty control (0xA5). duty: -1.0 ~ 1.0, sent as int16 * 10000."""
+    raw = int(max(-1.0, min(1.0, duty)) * 10000)
+    val = raw & 0xFFFF
+    return bytes([RmdCommand.DUTY_CLOSED_LOOP, 0, 0, 0, val & 0xFF, (val >> 8) & 0xFF, 0, 0])
+
+
+# MIT parameter ranges (must match FW comm_can_rmd.h)
+MIT_P_MIN, MIT_P_MAX = -12.5, 12.5
+MIT_V_MIN, MIT_V_MAX = -76.0, 76.0
+MIT_KP_MIN, MIT_KP_MAX = 0.0, 500.0
+MIT_KD_MIN, MIT_KD_MAX = 0.0, 5.0
+MIT_T_MIN, MIT_T_MAX = -33.0, 33.0
+
+
+def _float_to_uint(x: float, x_min: float, x_max: float, bits: int) -> int:
+    span = x_max - x_min
+    x = max(x_min, min(x_max, x))
+    return int((x - x_min) * ((1 << bits) - 1) / span)
+
+
+def build_mit_control(p_des: float, v_des: float, kp: float, kd: float, t_ff: float) -> bytes:
+    """MIT impedance control (0xC0). 7-byte bit-packed."""
+    p_raw  = _float_to_uint(p_des, MIT_P_MIN, MIT_P_MAX, 16)
+    v_raw  = _float_to_uint(v_des, MIT_V_MIN, MIT_V_MAX, 12)
+    kp_raw = _float_to_uint(kp, MIT_KP_MIN, MIT_KP_MAX, 12)
+    kd_raw = _float_to_uint(kd, MIT_KD_MIN, MIT_KD_MAX, 8)
+    t_raw  = _float_to_uint(t_ff, MIT_T_MIN, MIT_T_MAX, 8)
+    return bytes([
+        RmdCommand.MIT_CONTROL,
+        (p_raw >> 8) & 0xFF, p_raw & 0xFF,
+        (v_raw >> 4) & 0xFF,
+        ((v_raw & 0x0F) << 4) | ((kp_raw >> 8) & 0x0F),
+        kp_raw & 0xFF,
+        kd_raw & 0xFF,
+        t_raw & 0xFF,
+    ])
+
+
+def build_mit_enter() -> bytes:
+    """MIT Enter Motor Mode (0xC1)."""
+    return bytes([RmdCommand.MIT_ENTER_MOTOR_MODE, 0, 0, 0, 0, 0, 0, 0])
+
+
+def build_mit_exit() -> bytes:
+    """MIT Exit Motor Mode (0xC2)."""
+    return bytes([RmdCommand.MIT_EXIT_MOTOR_MODE, 0, 0, 0, 0, 0, 0, 0])
+
+
+def build_mit_set_zero() -> bytes:
+    """MIT Set Zero Position (0xC3)."""
+    return bytes([RmdCommand.MIT_SET_ZERO_POS, 0, 0, 0, 0, 0, 0, 0])
+
+
 # ── Response parsers ───────────────────────────────────────────────
 
 PHASE_CURR_SCALE = 1.0 / 64.0   # 0x9D phase current: 1A/64 LSB
@@ -434,7 +494,9 @@ def format_response_log(cmd: int, data: list | bytes) -> str:
             return (f"temp:{s.motor_temp:.0f}C torque:{s.torque_curr:.3f}A "
                     f"speed:{s.speed_dps}dps enc:{s.enc_pos:.2f}deg")
 
-        elif cmd in (RmdCommand.MOTOR_OFF, RmdCommand.MOTOR_STOP, RmdCommand.MOTOR_START):
+        elif cmd in (RmdCommand.MOTOR_OFF, RmdCommand.MOTOR_STOP, RmdCommand.MOTOR_START,
+                     RmdCommand.MIT_ENTER_MOTOR_MODE, RmdCommand.MIT_EXIT_MOTOR_MODE,
+                     RmdCommand.MIT_SET_ZERO_POS):
             return f"cmd {RmdCommand(cmd).name} ACK"
 
         return f"cmd=0x{cmd:02X} data={' '.join(f'{b:02x}' for b in data)}"

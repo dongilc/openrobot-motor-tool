@@ -4,6 +4,7 @@ Gracefully degrades if PCAN DLL is not installed.
 
 v2: Added VESC EID (Extended ID) multi-frame send/receive for VESC commands
     over CAN bus (firmware update, MCCONF read/write, etc.).
+v2.2: Combined FW+BL upload, config backup/restore on firmware update.
 """
 
 import struct
@@ -54,9 +55,9 @@ class PcanTransport(QObject):
     """
 
     frame_received = pyqtSignal(int, int, float, list)  # can_id, dlc, timestamp, data_list
-    status_received = pyqtSignal(object)                 # RmdStatus (from 0x9C polling only)
-    cmd_status_received = pyqtSignal(object)             # RmdStatus (from 0xA1-A4 control responses)
-    status3_received = pyqtSignal(object)                # RmdStatus3 (0x9D)
+    status_received = pyqtSignal(int, object)             # (motor_id, RmdStatus) from 0x9C polling
+    cmd_status_received = pyqtSignal(int, object)        # (motor_id, RmdStatus) from 0xA1-A4 control
+    status3_received = pyqtSignal(int, object)           # (motor_id, RmdStatus3) from 0x9D
     multiturn_received = pyqtSignal(float)               # degrees (0x92)
     connected = pyqtSignal()
     disconnected = pyqtSignal()
@@ -443,30 +444,30 @@ class PcanTransport(QObject):
         # Parse RMD protocol response (standard frame only)
         if msg.LEN == 8:
             cmd = data_list[0]
+            motor_id = msg.ID - CAN_HEADER_ID if msg.ID >= CAN_HEADER_ID else 0
 
             if cmd == RmdCommand.READ_MOTOR_STATUS_2:
                 # Scan mode: collect responding motor IDs
                 if self._scan_mode:
-                    motor_id = msg.ID - CAN_HEADER_ID
                     if motor_id > 0:
                         self._scan_found.add(motor_id)
                 # 0x9C polling response → status_received (for graphs)
                 try:
                     status = parse_status(data_list)
-                    self.status_received.emit(status)
+                    self.status_received.emit(motor_id, status)
                 except Exception:
                     pass
             elif cmd in STATUS_RETURN_COMMANDS:
                 # 0xA1-A4 control command responses → separate signal
                 try:
                     status = parse_status(data_list)
-                    self.cmd_status_received.emit(status)
+                    self.cmd_status_received.emit(motor_id, status)
                 except Exception:
                     pass
             elif cmd == RmdCommand.READ_MOTOR_STATUS_3:
                 try:
                     status3 = parse_status3(data_list)
-                    self.status3_received.emit(status3)
+                    self.status3_received.emit(motor_id, status3)
                 except Exception:
                     pass
             elif cmd == RmdCommand.READ_MULTI_TURN_ANGLE:

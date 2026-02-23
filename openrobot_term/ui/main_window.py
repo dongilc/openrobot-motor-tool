@@ -28,7 +28,7 @@ from .can_position_tuning_tab import CanPositionTuningTab
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("OpenRobot Motor Tool V2 (PCAN Only)")
+        self.setWindowTitle("OpenRobot Motor Tool V2.2 (PCAN Only)")
 
         self.can_transport = PcanTransport()
 
@@ -68,8 +68,8 @@ class MainWindow(QMainWindow):
         self.firmware_tab = FirmwareTab(self.can_transport)
 
         self.tabs.addTab(self.parameter_tab, "Parameter")
-        self.tabs.addTab(self.realtime_tab, "Real-time Data")
         self.tabs.addTab(self.can_data_tab, "CAN Data")
+        self.tabs.addTab(self.realtime_tab, "Real-time Data")
         self.tabs.addTab(self.experiment_tab, "Experiment Data")
         self.tabs.addTab(self.position_tab, "Position")
         self.tabs.addTab(self.waveform_tab, "Waveform")
@@ -123,6 +123,9 @@ class MainWindow(QMainWindow):
         self.conn_bar.can_targets_updated.connect(self.can_control_tab.update_discovered_ids)
         self.conn_bar.can_targets_updated.connect(self.firmware_tab.update_can_targets)
         self.conn_bar.can_targets_updated.connect(self._on_can_targets_found)
+
+        # CAN Data tab requests re-scan before starting polling
+        self.can_data_tab.rescan_requested.connect(self.conn_bar._on_can_scan)
 
         # VESC EID response dispatch (CAN → all tabs)
         self.can_transport.vesc_response_received.connect(self._dispatch_vesc_response)

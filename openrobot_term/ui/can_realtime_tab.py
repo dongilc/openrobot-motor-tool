@@ -195,7 +195,7 @@ class CanRealtimeTab(QWidget):
 
     # ── Data ingestion ──
 
-    def _on_status(self, status: RmdStatus):
+    def _on_status(self, motor_id: int, status: RmdStatus):
         if self._t0 is None:
             self._t0 = time.time()
 

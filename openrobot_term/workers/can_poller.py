@@ -2,6 +2,10 @@
 Periodic CAN status poller thread — mirrors DataPoller pattern.
 Sends READ_MOTOR_STATUS_2 (0x9C) + READ_MOTOR_STATUS_3 (0x9D) at configurable rate.
 Uses perf_counter busy-wait for sub-ms accuracy at high rates (>=200 Hz).
+
+Supports multi-device polling: when motor_ids is provided, polls all IDs
+each tick using send_frame_to(). Otherwise falls back to send_frame()
+(single target selected in connection_bar).
 """
 
 import time
@@ -15,11 +19,13 @@ class CanPoller(QThread):
 
     tick = pyqtSignal()
 
-    def __init__(self, can_transport: PcanTransport, interval_ms: int = 100):
+    def __init__(self, can_transport: PcanTransport, interval_ms: int = 100,
+                 motor_ids: list[int] | None = None):
         super().__init__()
         self._transport = can_transport
         self._interval_s = interval_ms / 1000.0
         self._running = False
+        self._motor_ids = list(motor_ids) if motor_ids else []
 
     @property
     def interval_ms(self) -> int:
@@ -28,6 +34,10 @@ class CanPoller(QThread):
     @interval_ms.setter
     def interval_ms(self, ms: int):
         self._interval_s = ms / 1000.0
+
+    def set_motor_ids(self, ids: list[int]):
+        """Update the list of motor IDs to poll (thread-safe: list replace is atomic)."""
+        self._motor_ids = list(ids)
 
     def start(self):
         self._running = True
@@ -43,8 +53,16 @@ class CanPoller(QThread):
         while self._running:
             if self._transport.is_connected():
                 try:
-                    self._transport.send_frame(frame_9d)   # 0x9D first so response arrives before 0x9C
-                    self._transport.send_frame(frame_9c)
+                    ids = self._motor_ids
+                    if ids:
+                        # Multi-device: poll all discovered IDs
+                        for mid in ids:
+                            self._transport.send_frame_to(mid, frame_9d)
+                            self._transport.send_frame_to(mid, frame_9c)
+                    else:
+                        # Single target (connection_bar selected ID)
+                        self._transport.send_frame(frame_9d)
+                        self._transport.send_frame(frame_9c)
                 except Exception:
                     break  # transport error — exit cleanly
                 if self._running:
