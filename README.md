@@ -1,4 +1,4 @@
-# OpenRobot Motor Tool v2.1
+# OpenRobot Motor Tool v2.2
 
 > English | **[한국어](README_ko.md)**
 
