@@ -144,7 +144,7 @@ openrobot_motor_tool/
 - **RTOS**: ChibiOS 3.0.5
 - **Motor Controller**: OpenRobot MC series (SPN-MC1 V1R2 60A)
 - **Encoder**: AS5047 (14-bit), MT6835 (21-bit) supported
-- **CAN**: [OpenRobot Motor CAN Protocol v10](https://dongilc.github.io/openrobot-motor-tool/) (SID + VESC EID)
+- **CAN**: [OpenRobot Motor CAN Protocol v11](https://dongilc.github.io/openrobot-motor-tool/) (SID + VESC EID)
 
 ## License
 
