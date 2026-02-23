@@ -43,7 +43,7 @@ PyQt6 기반 OpenRobot 모터 컨트롤러 GUI 툴. **CAN-Only 아키텍처** �
 - Windows (PCAN 드라이버 필요)
 
 ### Hardware
-- **OpenRobot 모터 컨트롤러** (SPN-MC1 V1R2 60A)
+- **OpenRobot 모터 컨트롤러** (SPN-MC1 V1R2)
 - **USB-to-CAN 어댑터** (필수) — 아래 중 하나 필요:
   - [PCAN-USB](https://www.peak-system.com/PCAN-USB.199.0.html) (PEAK-System)
   - [PCAN-USB FD](https://www.peak-system.com/PCAN-USB-FD.365.0.html) (PEAK-System, CAN FD 지원)
@@ -142,7 +142,7 @@ openrobot_motor_tool/
 
 - **MCU**: STM32F405 (ARM Cortex-M4, 168MHz)
 - **RTOS**: ChibiOS 3.0.5
-- **Motor Controller**: OpenRobot MC 시리즈 (SPN-MC1 V1R2 60A)
+- **Motor Controller**: OpenRobot MC 시리즈 (SPN-MC1 V1R2)
 - **Encoder**: AS5047 (14-bit), MT6835 (21-bit) 지원
 - **CAN**: [OpenRobot Motor CAN Protocol v11](https://dongilc.github.io/openrobot-motor-tool/) (SID + VESC EID)
 

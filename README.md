@@ -43,7 +43,7 @@ PyQt6-based GUI tool for OpenRobot motor controllers. **CAN-Only architecture** 
 - Windows (PCAN driver required)
 
 ### Hardware
-- **OpenRobot Motor Controller** (SPN-MC1 V1R2 60A)
+- **OpenRobot Motor Controller** (SPN-MC1 V1R2)
 - **USB-to-CAN Adapter** (required) — one of the following:
   - [PCAN-USB](https://www.peak-system.com/PCAN-USB.199.0.html) (PEAK-System)
   - [PCAN-USB FD](https://www.peak-system.com/PCAN-USB-FD.365.0.html) (PEAK-System, CAN FD support)
@@ -142,7 +142,7 @@ openrobot_motor_tool/
 
 - **MCU**: STM32F405 (ARM Cortex-M4, 168MHz)
 - **RTOS**: ChibiOS 3.0.5
-- **Motor Controller**: OpenRobot MC series (SPN-MC1 V1R2 60A)
+- **Motor Controller**: OpenRobot MC series (SPN-MC1 V1R2)
 - **Encoder**: AS5047 (14-bit), MT6835 (21-bit) supported
 - **CAN**: [OpenRobot Motor CAN Protocol v11](https://dongilc.github.io/openrobot-motor-tool/) (SID + VESC EID)
 
