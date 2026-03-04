@@ -416,7 +416,7 @@
 <!-- ============================================================ -->
 <!-- GENERAL -->
 <!-- ============================================================ -->
-<h2>General <span class="new-badge">NEW in v9</span></h2>
+<h2>General</h2>
 
 <table class="general-table">
   <tr><th>Item</th><th>Value</th></tr>
@@ -426,7 +426,7 @@
   <tr><td>Byte Order</td><td>Little-Endian</td></tr>
 </table>
 
-<h3>Motor Direction Inversion <span class="new-badge">NEW in v12</span></h3>
+<h3>Motor Direction Inversion</h3>
 <p class="cmd-desc">MCCONF의 <code>m_invert_direction</code> 설정이 CAN 경계에서 자동 적용된다.</p>
 
 <div class="new-box">
@@ -435,7 +435,7 @@
   <strong>비반전:</strong> Torque (0xA1), Duty (0xA5), eRPM (0xA2 mode=1)은 <code>mc_interface_*</code> API를 경유하므로 내부에서 자동 반전됨. MIT의 Kp/Kd 게인은 항상 양수이므로 반전 안함.
 </div>
 
-<h3>Motor Status Response Format <span class="new-badge">NEW in v9</span></h3>
+<h3>Motor Status Response Format</h3>
 <p class="cmd-desc">공통 응답 포맷 &mdash; <code>0xA1</code>~<code>0xA4</code>, <code>0x9C</code>, <code>0xC0</code> 명령에 공통 적용</p>
 
 <table>
@@ -465,8 +465,8 @@
   <tr><td>Write encoder offset</td><td>0x91</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="2">Encoder offset</td></tr>
   <tr><td>Write current pos as zero</td><td>0x19</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Read multi turns angle</td><td>0x92</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr class="new-row"><td><strong>Read Motor Status 2</strong></td><td>0x9C</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr class="new-row"><td><strong>Read Motor Status 3</strong></td><td>0x9D</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>Read Motor Status 2</strong></td><td>0x9C</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>Read Motor Status 3</strong></td><td>0x9D</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Motor off</td><td>0x80</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Motor stop</td><td>0x81</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Motor running</td><td>0x88</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
@@ -474,17 +474,17 @@
   <tr><td>Speed closed-loop</td><td>0xA2</td><td><strong>speed_mode</strong></td><td>NULL</td><td>NULL</td><td colspan="4">speed control (int32)</td></tr>
   <tr><td>Position closed-loop 1</td><td>0xA3</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="4">Position control (int32)</td></tr>
   <tr><td>Set Multiturn position</td><td>0xA4</td><td>NULL</td><td colspan="2">Speed limit</td><td colspan="4">Position control (int32)</td></tr>
-  <tr class="new-row"><td><strong>Duty Closed-Loop</strong></td><td>0xA5</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="2">Duty (int16)</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>Duty Closed-Loop</strong></td><td>0xA5</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="2">Duty (int16)</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Read Fault Code</td><td>0xB0</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Read Max Current</td><td>0xB1</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Write Max Current to ROM</td><td>0xB2</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
-  <tr class="new-row"><td><strong>MIT Control</strong></td><td>0xC0</td><td colspan="2">p_des (16bit)</td><td>v_hi (8bit)</td><td>v_lo4|kp_hi4</td><td>kp_lo (8bit)</td><td>Kd (8bit)</td></tr>
-  <tr class="new-row"><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr class="new-row"><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr class="new-row"><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr class="new-row"><td><strong>Read MIT Params</strong></td><td>0xC4</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr class="new-row"><td><strong>Write MIT Params to ROM</strong></td><td>0xC5</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_input (uint16)</td><td colspan="2">GR (uint16)</td></tr>
-  <tr class="new-row"><td><strong>Read External Sensor</strong></td><td>0xD0</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>MIT Control</strong></td><td>0xC0</td><td colspan="2">p_des (16bit)</td><td>v_hi (8bit)</td><td>v_lo4|kp_hi4</td><td>kp_lo (8bit)</td><td>Kd (8bit)</td></tr>
+  <tr><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>Read MIT Params</strong></td><td>0xC4</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>Write MIT Params to ROM</strong></td><td>0xC5</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_input (uint16)</td><td colspan="2">GR (uint16)</td></tr>
+  <tr><td><strong>Read External Sensor</strong></td><td>0xD0</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
 </table>
 
 <h2>RX CAN Protocols Summary</h2>
@@ -499,8 +499,8 @@
   <tr><td>Write encoder offset</td><td>0x91</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td colspan="2">Encoder offset</td></tr>
   <tr><td>Write current pos as zero</td><td>0x19</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td colspan="2">Encoder offset</td></tr>
   <tr><td>Read multi turns angle</td><td>0x92</td><td colspan="7">Multi-turn Angle (7 bytes LE)</td></tr>
-  <tr class="new-row"><td><strong>Read Motor Status 2</strong></td><td>0x9C</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
-  <tr class="new-row"><td><strong>Read Motor Status 3</strong></td><td>0x9D</td><td>Control Mode</td><td colspan="2">Phase A Curr</td><td colspan="2">Phase B Curr</td><td colspan="2">Phase C Curr</td></tr>
+  <tr><td><strong>Read Motor Status 2</strong></td><td>0x9C</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
+  <tr><td><strong>Read Motor Status 3</strong></td><td>0x9D</td><td>Control Mode</td><td colspan="2">Phase A Curr</td><td colspan="2">Phase B Curr</td><td colspan="2">Phase C Curr</td></tr>
   <tr><td>Motor off</td><td>0x80</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
   <tr><td>Motor stop</td><td>0x81</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
   <tr><td>Motor running</td><td>0x88</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
@@ -508,22 +508,26 @@
   <tr><td>Speed closed-loop</td><td>0xA2</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
   <tr><td>Position closed-loop 1</td><td>0xA3</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
   <tr><td>Set Multiturn position</td><td>0xA4</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
-  <tr class="new-row"><td><strong>Duty Closed-Loop</strong></td><td>0xA5</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
+  <tr><td><strong>Duty Closed-Loop</strong></td><td>0xA5</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
   <tr><td>Read Fault Code</td><td>0xB0</td><td>Code1</td><td>Code2</td><td>Code3</td><td>Code4</td><td>Code5</td><td>Code6</td><td>Code7</td></tr>
   <tr><td>Read Max Current</td><td>0xB1</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
   <tr><td>Write Max Current to ROM</td><td>0xB2</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
-  <tr class="new-row"><td><strong>MIT Control</strong></td><td>0xC0</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
-  <tr class="new-row"><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
-  <tr class="new-row"><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
-  <tr class="new-row"><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
-  <tr class="new-row"><td><strong>Read MIT Params / Write MIT Params</strong></td><td>0xC4</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_out (uint16)</td><td colspan="2">GR (uint16)</td></tr>
-  <tr class="new-row"><td><strong>Read External Sensor</strong></td><td>0xD0</td><td>valid</td><td colspan="2">Temperature</td><td colspan="2">Pressure</td><td colspan="2">Atmosphere</td></tr>
+  <tr><td><strong>MIT Control</strong></td><td>0xC0</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
+  <tr><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
+  <tr><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
+  <tr><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
+  <tr><td><strong>Read MIT Params / Write MIT Params</strong></td><td>0xC4</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_out (uint16)</td><td colspan="2">GR (uint16)</td></tr>
+  <tr><td><strong>Read External Sensor</strong></td><td>0xD0</td><td>valid</td><td colspan="2">Temperature</td><td colspan="2">Pressure</td><td colspan="2">Atmosphere</td></tr>
 </table>
+
+<div class="info" style="margin-top: -8px;">
+  <strong>0xC4/0xC5 Kt 주의:</strong> TX (Write 0xC5)에서는 모터단 <strong>Kt_input</strong>을 보내고, RX 응답에서는 출력단 <strong>Kt_out</strong> (= Kt_input &times; GR)을 반환한다. 상세 내용은 Command Details 참조.
+</div>
 
 <!-- ============================================================ -->
 <!-- COMMAND SUMMARY -->
 <!-- ============================================================ -->
-<h2>Command Summary <span class="new-badge">NEW in v9</span></h2>
+<h2>Command Summary</h2>
 
 <table class="summary-table">
   <tr>
@@ -535,8 +539,8 @@
   <tr><td><code>0x91</code></td><td>Write Encoder Offset</td><td class="type-write">Write</td><td>No (echo)</td></tr>
   <tr><td><code>0x19</code></td><td>Write Current Pos as Zero</td><td class="type-write">Write</td><td>No (offset)</td></tr>
   <tr><td><code>0x92</code></td><td>Read Multi-Turn Angle</td><td class="type-read">Read</td><td>No (angle only)</td></tr>
-  <tr class="new-row"><td><code>0x9C</code></td><td>Read Motor Status 2 &nbsp;<span style="color:#28a745; font-size:11px;">NEW</span></td><td class="type-read">Read</td><td><strong>Yes</strong></td></tr>
-  <tr class="new-row"><td><code>0x9D</code></td><td>Read Motor Status 3 &nbsp;<span style="color:#28a745; font-size:11px;">NEW</span></td><td class="type-read">Read</td><td><strong>Yes (phase currents)</strong></td></tr>
+  <tr><td><code>0x9C</code></td><td>Read Motor Status 2</td><td class="type-read">Read</td><td><strong>Yes</strong></td></tr>
+  <tr><td><code>0x9D</code></td><td>Read Motor Status 3</td><td class="type-read">Read</td><td><strong>Yes (phase currents)</strong></td></tr>
   <tr><td><code>0x80</code></td><td>Motor Off</td><td class="type-control">Control</td><td>No (ACK)</td></tr>
   <tr><td><code>0x81</code></td><td>Motor Stop</td><td class="type-control">Control</td><td>No (ACK)</td></tr>
   <tr><td><code>0x88</code></td><td>Motor Running (Start)</td><td class="type-control">Control</td><td>No (ACK)</td></tr>
@@ -544,17 +548,17 @@
   <tr><td><code>0xA2</code></td><td>Speed Closed-Loop</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
   <tr><td><code>0xA3</code></td><td>Position Closed-Loop 1</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
   <tr><td><code>0xA4</code></td><td>Set Multiturn Position</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
-  <tr class="new-row"><td><code>0xA5</code></td><td>Duty Closed-Loop &nbsp;<span style="color:#28a745; font-size:11px;">NEW</span></td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
+  <tr><td><code>0xA5</code></td><td>Duty Closed-Loop</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
   <tr><td><code>0xB0</code></td><td>Read Fault Code</td><td class="type-read">Read</td><td>No (fault codes)</td></tr>
   <tr><td><code>0xB1</code></td><td>Read Max Current</td><td class="type-read">Read</td><td>No (current limits)</td></tr>
   <tr><td><code>0xB2</code></td><td>Write Max Current to ROM</td><td class="type-write">Write</td><td>No (echo)</td></tr>
-  <tr class="new-row"><td><code>0xC0</code></td><td>MIT Control &nbsp;<span style="color:#28a745; font-size:11px;">NEW</span></td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
-  <tr class="new-row"><td><code>0xC1</code></td><td>MIT Enter Motor Mode &nbsp;<span style="color:#28a745; font-size:11px;">NEW</span></td><td class="type-control">Control</td><td>No (ACK)</td></tr>
-  <tr class="new-row"><td><code>0xC2</code></td><td>MIT Exit Motor Mode &nbsp;<span style="color:#28a745; font-size:11px;">NEW</span></td><td class="type-control">Control</td><td>No (ACK)</td></tr>
-  <tr class="new-row"><td><code>0xC3</code></td><td>MIT Set Zero Position &nbsp;<span style="color:#28a745; font-size:11px;">NEW</span></td><td class="type-write">Write</td><td>No (ACK)</td></tr>
-  <tr class="new-row"><td><code>0xC4</code></td><td>Read MIT Params &nbsp;<span style="color:#28a745; font-size:11px;">NEW v12</span></td><td class="type-read">Read</td><td>No (MIT params)</td></tr>
-  <tr class="new-row"><td><code>0xC5</code></td><td>Write MIT Params to ROM &nbsp;<span style="color:#28a745; font-size:11px;">NEW v12</span></td><td class="type-write">Write</td><td>No (echo as 0xC4)</td></tr>
-  <tr class="new-row"><td><code>0xD0</code></td><td>Read External Sensor &nbsp;<span style="color:#28a745; font-size:11px;">NEW v12</span></td><td class="type-read">Read</td><td>No (sensor data)</td></tr>
+  <tr><td><code>0xC0</code></td><td>MIT Control</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
+  <tr><td><code>0xC1</code></td><td>MIT Enter Motor Mode</td><td class="type-control">Control</td><td>No (ACK)</td></tr>
+  <tr><td><code>0xC2</code></td><td>MIT Exit Motor Mode</td><td class="type-control">Control</td><td>No (ACK)</td></tr>
+  <tr><td><code>0xC3</code></td><td>MIT Set Zero Position</td><td class="type-write">Write</td><td>No (ACK)</td></tr>
+  <tr><td><code>0xC4</code></td><td>Read MIT Params</td><td class="type-read">Read</td><td>No (MIT params)</td></tr>
+  <tr><td><code>0xC5</code></td><td>Write MIT Params to ROM</td><td class="type-write">Write</td><td>No (echo as 0xC4)</td></tr>
+  <tr><td><code>0xD0</code></td><td>Read External Sensor</td><td class="type-read">Read</td><td>No (sensor data)</td></tr>
 </table>
 
 <!-- ============================================================ -->
@@ -673,7 +677,7 @@
 
 <!-- 0x9C NEW -->
 <hr>
-<h3><span class="cmd-id">0x9C</span> Read Motor Status 2 <span class="new-badge">NEW in v9</span></h3>
+<h3><span class="cmd-id">0x9C</span> Read Motor Status 2</h3>
 <p class="cmd-desc">Read-only status query. Returns same motor status format as 0xA1~0xA4 without commanding any motion. Safe for continuous polling.</p>
 
 <div class="tx-frame"><span class="tx-label">TX:</span> [0x9C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
@@ -694,7 +698,7 @@
 
 <!-- 0x9D NEW -->
 <hr>
-<h3><span class="cmd-id">0x9D</span> Read Motor Status 3 <span class="new-badge">NEW in v9</span></h3>
+<h3><span class="cmd-id">0x9D</span> Read Motor Status 3</h3>
 <p class="cmd-desc">Read-only status query returning <strong>control mode</strong> and <strong>phase currents</strong> (A/B/C).
 Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (originally NULL).</p>
 
@@ -724,7 +728,7 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
   <tr><td>9</td><td>DPS_CONTROL_DURATION</td><td>0xA2 Speed (mode=0) / 0x81 Stop</td></tr>
   <tr style="background: #dbeafe;"><td><strong>10</strong></td><td><strong>SERVO_CONTROL</strong></td><td><strong>0xA4 / or_limit redirect</strong></td></tr>
   <tr><td>11</td><td>TRAJ_CONTROL</td><td>Trajectory</td></tr>
-  <tr style="background: var(--new-bg);"><td><strong>12</strong></td><td><strong>MIT_CONTROL_MODE</strong></td><td><strong>0xC0 MIT Control</strong> <span style="color:#28a745; font-size:11px;">NEW v12</span></td></tr>
+  <tr><td><strong>12</strong></td><td><strong>MIT_CONTROL_MODE</strong></td><td><strong>0xC0 MIT Control</strong></td></tr>
 </table>
 
 <div class="new-box">
@@ -800,7 +804,7 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 
 <!-- 0xA2 -->
 <hr>
-<h3><span class="cmd-id">0xA2</span> Speed Closed-Loop <span class="new-badge">UPDATED v9</span></h3>
+<h3><span class="cmd-id">0xA2</span> Speed Closed-Loop</h3>
 <p class="cmd-desc">Supports two speed control modes selectable via DATA[1].</p>
 
 <p><strong>TX:</strong></p>
@@ -829,7 +833,7 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 </div>
 
 <div class="note-box">
-  <div class="note-title">부연설명 &mdash; Mode 1: eRPM 제어 (VESC 내장) <span class="new-badge">NEW in v9</span></div>
+  <div class="note-title">부연설명 &mdash; Mode 1: eRPM 제어 (VESC 내장) </div>
   VESC에 기본 탑재된 PID 속도제어 루프를 사용한다. eRPM (electrical RPM) 단위로 속도 명령을 보내며, VESC-Tool의 Speed PID 설정(Kp, Ki, Kd 등)에 의해 제어 성능이 결정된다. DPS 모드와 달리 위치제어 기반이 아닌 순수 속도 PID 제어이므로, 고속 영역에서의 응답 특성이 다르다.<br><br>
   VESC timeout 메커니즘이 적용되므로 주기적으로 명령을 보내거나, 1회 전송 후 유지되도록 설정해야 한다.
 </div>
@@ -840,7 +844,7 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 
 <!-- 0xA3 -->
 <hr>
-<h3><span class="cmd-id">0xA3</span> Position Closed-Loop 1 <span style="font-size:13px; color:var(--text-light);">(Multi-turn, Direct PID)</span> <span class="new-badge" style="background:#e67e22;">UPDATED v9</span></h3>
+<h3><span class="cmd-id">0xA3</span> Position Closed-Loop 1 <span style="font-size:13px; color:var(--text-light);">(Multi-turn, Direct PID)</span></h3>
 <p class="cmd-desc">Direct position PID control. <strong>No velocity limiting</strong> &mdash; large steps cause full current output immediately.</p>
 
 <p><strong>TX:</strong></p>
@@ -854,8 +858,8 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 <p><strong>RX:</strong> Motor Status Response Format</p>
 
 <div class="warning">
-  <strong>WARNING <span class="new-badge">NEW in v9</span>:</strong> No velocity ramping. Large position jumps cause instantaneous max current output, which can damage DRV/FET.
-  Use <code>or_limit</code> safety limiter <span class="new-badge">NEW in v9</span> or prefer <code>0xA4</code> for large moves.
+  <strong>WARNING:</strong> No velocity ramping. Large position jumps cause instantaneous max current output, which can damage DRV/FET.
+  Use <code>or_limit</code> safety limiter or prefer <code>0xA4</code> for large moves.
 </div>
 
 <div class="note-box">
@@ -978,7 +982,7 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 
 <!-- 0xA5 -->
 <hr>
-<h3><span class="cmd-id">0xA5</span> Duty Closed-Loop <span class="new-badge">NEW in v11</span></h3>
+<h3><span class="cmd-id">0xA5</span> Duty Closed-Loop</h3>
 <p class="cmd-desc">PWM Duty를 직접 설정. &minus;1.0 ~ 1.0 범위의 Duty를 int16 (scale &times;10000)으로 전송.</p>
 
 <div class="tx-frame">
@@ -1003,9 +1007,9 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 <!-- ============================================================ -->
 <!-- TERMINAL COMMANDS -->
 <!-- ============================================================ -->
-<h2>Terminal Commands <span class="new-badge">NEW in v9</span></h2>
+<h2>Terminal Commands</h2>
 
-<h3><code>or_limit</code> &mdash; Position Command Safety Limiter <span class="new-badge">NEW in v9</span></h3>
+<h3><code>or_limit</code> &mdash; Position Command Safety Limiter</h3>
 <p class="cmd-desc">Firmware-level protection against dangerous large position jumps via <code>0xA3</code>.
 Without protection, a large position step causes the PID to output maximum current instantaneously, which can trigger DRV/FET overcurrent faults.</p>
 
@@ -1120,7 +1124,7 @@ Without protection, a large position step causes the PID to output maximum curre
 <!-- ============================================================ -->
 <!-- MIT CONTROL PROTOCOL -->
 <!-- ============================================================ -->
-<h2>MIT Control Protocol <span class="new-badge">NEW in v11</span></h2>
+<h2>MIT Control Protocol</h2>
 
 <p>CubeMars AK 시리즈 호환 임피던스 제어 프로토콜. 로봇 관절의 컴플라이언트 제어에 사용되며, 매 제어 사이클마다 위치/속도 목표값과 강성/감쇠 게인 및 피드포워드 토크를 전송한다.</p>
 
@@ -1385,7 +1389,8 @@ Without protection, a large position step causes the PID to output maximum curre
 </div>
 
 <div class="info">
-  <strong>v12 변경:</strong> Set Zero (<code>0xC3</code>)는 이제 런타임 오프셋만 설정하며 EEPROM에 저장하지 않는다. MIT 제어 중에도 안전하게 전송할 수 있다 (20ms hold counter). 엔코더 물리적 영점은 <code>0x19</code> (Write Current Pos as Zero)를 사용할 것.
+  <strong>참고:</strong> Set Zero (<code>0xC3</code>)는 런타임 오프셋만 설정하며 EEPROM에 저장하지 않는다. 전원 OFF 시 초기화됨. 엔코더 물리적 영점은 <code>0x19</code> (Write Current Pos as Zero)를 사용할 것.<br>
+  RMD 제어 모드에서 MIT 모드로 최초 진입 시 현재 위치를 자동 오프셋으로 캡처하므로 p_act=0에서 부드럽게 시작한다.
 </div>
 
 <!-- ── Feedback Variables ── -->
@@ -1427,7 +1432,7 @@ Without protection, a large position step causes the PID to output maximum curre
 
 <!-- 0xC0 -->
 <hr>
-<h3><span class="cmd-id">0xC0</span> MIT Control <span class="new-badge">NEW</span></h3>
+<h3><span class="cmd-id">0xC0</span> MIT Control</h3>
 <p class="cmd-desc">MIT 임피던스 제어. 위치/속도/강성/감쇠/피드포워드 토크 5개 파라미터를 7-byte 패킹으로 전송.</p>
 
 <div class="tx-frame"><span class="tx-label">TX:</span> [0xC0, p_hi, p_lo, v_hi, v_lo4|kp_hi4, kp_lo, kd, tff]</div>
@@ -1452,7 +1457,7 @@ Without protection, a large position step causes the PID to output maximum curre
 
 <!-- 0xC1 -->
 <hr>
-<h3><span class="cmd-id">0xC1</span> MIT Enter Motor Mode <span class="new-badge">NEW</span></h3>
+<h3><span class="cmd-id">0xC1</span> MIT Enter Motor Mode</h3>
 <p class="cmd-desc">모터 Enable. CubeMars 프로토콜의 Enter Motor Mode (0xFC)에 해당.</p>
 
 <div class="tx-frame"><span class="tx-label">TX:</span> [0xC1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
@@ -1460,7 +1465,7 @@ Without protection, a large position step causes the PID to output maximum curre
 
 <!-- 0xC2 -->
 <hr>
-<h3><span class="cmd-id">0xC2</span> MIT Exit Motor Mode <span class="new-badge">NEW</span></h3>
+<h3><span class="cmd-id">0xC2</span> MIT Exit Motor Mode</h3>
 <p class="cmd-desc">모터 Release. CubeMars 프로토콜의 Exit Motor Mode (0xFD)에 해당. 전류를 0으로 만들고 모터를 해제한다.</p>
 
 <div class="tx-frame"><span class="tx-label">TX:</span> [0xC2, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
@@ -1468,19 +1473,20 @@ Without protection, a large position step causes the PID to output maximum curre
 
 <!-- 0xC3 -->
 <hr>
-<h3><span class="cmd-id">0xC3</span> MIT Set Zero Position <span class="new-badge">UPDATED v12</span></h3>
+<h3><span class="cmd-id">0xC3</span> MIT Set Zero Position</h3>
 <p class="cmd-desc">MIT 제어의 현재 위치를 영점으로 설정. CubeMars 프로토콜의 Set Zero Position (0xFE)에 해당.</p>
 
 <div class="tx-frame"><span class="tx-label">TX:</span> [0xC3, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
 <div class="tx-frame"><span class="tx-label">RX:</span> [0xC3, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
 
-<div class="new-box">
-  <strong>v12 변경:</strong> 런타임 오프셋만 적용 (EEPROM 쓰기 제거). <code>m_mit_pos_offset_deg</code>를 현재 <code>pos_accum</code>으로 설정하여 p_act=0부터 시작. 20ms hold counter로 Set Zero 직후 잔류 CAN 명령에 의한 토크 스파이크 방지. 엔코더 물리적 영점 설정은 별도 <code>0x19</code> (Write Current Pos as Zero) 명령을 사용할 것.
+<div class="info">
+  <strong>런타임 오프셋 방식:</strong> <code>m_mit_pos_offset_deg</code>를 현재 <code>pos_accum</code>으로 설정하여 p_act=0부터 시작한다. EEPROM에 저장하지 않으므로 전원 OFF 시 초기화된다. 20ms hold counter가 Set Zero 직후 잔류 CAN 명령을 무시하여 토크 스파이크를 방지한다. MIT 제어 중에도 안전하게 전송 가능.<br><br>
+  <strong>엔코더 물리적 영점</strong>은 별도 <code>0x19</code> (Write Current Pos as Zero) 명령을 사용할 것.
 </div>
 
 <!-- 0xC4 / 0xC5 -->
 <hr>
-<h3><span class="cmd-id">0xC4</span> Read MIT Params / <span class="cmd-id">0xC5</span> Write MIT Params to ROM <span class="new-badge">NEW v12</span></h3>
+<h3><span class="cmd-id">0xC4</span> Read MIT Params / <span class="cmd-id">0xC5</span> Write MIT Params to ROM</h3>
 <p class="cmd-desc">MIT 제어 파라미터 (V_MAX, T_MAX, Kt, Gear Ratio) 읽기/쓰기. EEPROM에 영구 저장.</p>
 
 <p><strong>TX (Read):</strong></p>
@@ -1520,7 +1526,7 @@ Without protection, a large position step causes the PID to output maximum curre
 
 <!-- 0xD0 -->
 <hr>
-<h3><span class="cmd-id">0xD0</span> Read External Sensor <span class="new-badge">NEW v12</span></h3>
+<h3><span class="cmd-id">0xD0</span> Read External Sensor</h3>
 <p class="cmd-desc">외부 센서 데이터 읽기. CAN &rarr; RS485 &rarr; XIAO RA4M1 &rarr; I2C &rarr; MS5803 경로로 온도/압력/기압을 읽는다. 응답까지 최대 500ms 소요.</p>
 
 <div class="tx-frame"><span class="tx-label">TX:</span> [0xD0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
@@ -1694,7 +1700,7 @@ Without protection, a large position step causes the PID to output maximum curre
 <!-- ============================================================ -->
 <!-- VESC EID PROTOCOL -->
 <!-- ============================================================ -->
-<h2>VESC EID Protocol <span class="new-badge">NEW in v10</span></h2>
+<h2>VESC EID Protocol</h2>
 
 <p>CAN Extended ID (EID)를 사용하는 VESC 내장 통신 프로토콜. SID 프로토콜과 별도로 동작하며, MCCONF/APPCONF 파라미터 설정, 펌웨어 업로드, 리부트 등에 사용된다.</p>
 
@@ -1772,13 +1778,13 @@ Without protection, a large position step causes the PID to output maximum curre
   <strong>주의:</strong> 부트로더 업로드 실패 시 복구 불가 (JTAG 필요). 반드시 안정적인 전원과 CAN 연결 상태에서 수행할 것.
 </div>
 
-<h3>Encoder Native Resolution <span class="new-badge">NEW in v10</span></h3>
+<h3>Encoder Native Resolution</h3>
 
 <table>
   <tr><th>Encoder</th><th>Resolution</th><th>CPR</th><th>Note</th></tr>
   <tr><td>AS5047</td><td>14-bit</td><td>16,384</td><td>CAN SID 프레임과 동일 해상도</td></tr>
   <tr><td>MT6835</td><td>21-bit</td><td>2,097,152</td><td>CAN SID에서는 14-bit로 정규화하여 전송</td></tr>
-  <tr style="background: var(--new-bg);"><td><strong>RLS AksIM-2</strong></td><td>20-bit</td><td>1,048,576</td><td>BiSS-C 인터페이스. CAN SID에서는 14-bit로 정규화 <span style="color:#28a745; font-size:11px;">NEW v12</span></td></tr>
+  <tr><td>RLS AksIM-2</td><td>20-bit</td><td>1,048,576</td><td>BiSS-C 인터페이스. CAN SID에서는 14-bit로 정규화</td></tr>
 </table>
 
 <div class="warning">
