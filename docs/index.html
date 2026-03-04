@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OpenRobot Motor CAN Protocol — OpenRobot MC v11</title>
+<title>OpenRobot Motor CAN Protocol — OpenRobot MC v12</title>
 <style>
   :root {
     --primary: #1a5276;
@@ -328,7 +328,7 @@
   <h1>OpenRobot Motor CAN Protocol</h1>
   <div class="subtitle">OpenRobot MC Custom Firmware &mdash; CAN Communication Specification</div>
   <div class="version-info">
-    <strong>Version 11</strong> &mdash; 2026-02-23 &nbsp;|&nbsp; by Dongil Choi, Hur Seongyoung
+    <strong>Version 12</strong> &mdash; 2026-03-05 &nbsp;|&nbsp; by Dongil Choi, Hur Seongyoung
   </div>
 </div>
 
@@ -401,6 +401,16 @@
     <li><strong>7-byte 비트 패킹</strong> &mdash; 위치(16bit) + 속도(12bit) + Kp(12bit) + Kd(8bit) + torque_ff(8bit) = 56bit = 7 bytes. RMD 프레임 호환 (data8[0]=cmd, data8[1-7]=MIT data).</li>
     <li><strong>Duty Closed-Loop 추가</strong> &mdash; <code>0xA5</code> Duty 제어. int16 (scale 1/10000, &minus;1.0~1.0). PWM Duty를 직접 설정.</li>
   </ul>
+
+  <h4>26-03-05 (v12)</h4>
+  <ul>
+    <li><strong>MIT Parameter R/W 추가</strong> &mdash; <code>0xC4</code> (Read MIT Params), <code>0xC5</code> (Write MIT Params to ROM). V_MAX, T_MAX, Kt, Gear Ratio 파라미터 읽기/쓰기.</li>
+    <li><strong>External Sensor 추가</strong> &mdash; <code>0xD0</code> (Read External Sensor). CAN &rarr; RS485 &rarr; XIAO &rarr; MS5803 경로로 온도/압력/기압 읽기.</li>
+    <li><strong>m_invert_direction 지원</strong> &mdash; MIT/DPS/Position/Servo 입력 명령 및 모든 vel_dps 응답에 <code>mc_interface_get_motor_dir()</code> 방향 반전 적용. CAN 경계에서만 반전하여 ISR 내부 대칭 구조 유지.</li>
+    <li><strong>MIT Set Zero (0xC3) 변경</strong> &mdash; 런타임 오프셋만 적용 (EEPROM 쓰기 제거). 20ms hold counter로 Set Zero 직후 토크 스파이크 방지. 엔코더 영점은 별도 <code>0x19</code> 명령 사용.</li>
+    <li><strong>RMD&rarr;MIT 전환 개선</strong> &mdash; MIT 모드 최초 진입 시 현재 위치를 자동 오프셋 캡처하여 토크 스파이크 방지 (p_act=0부터 시작).</li>
+    <li><strong>RLS AksIM-2 엔코더 지원</strong> &mdash; 20-bit (1,048,576 CPR) 엔코더 추가. <code>encoder_get_cpr()</code>에서 동적 CPR 반환.</li>
+  </ul>
 </div>
 
 <!-- ============================================================ -->
@@ -415,6 +425,15 @@
   <tr><td>DLC</td><td>8 bytes (fixed)</td></tr>
   <tr><td>Byte Order</td><td>Little-Endian</td></tr>
 </table>
+
+<h3>Motor Direction Inversion <span class="new-badge">NEW in v12</span></h3>
+<p class="cmd-desc">MCCONF의 <code>m_invert_direction</code> 설정이 CAN 경계에서 자동 적용된다.</p>
+
+<div class="new-box">
+  <strong>입력 반전 (TX):</strong> MIT Control (0xC0)의 p_des/v_des/t_ff, DPS (0xA2), Position (0xA3/0xA4), Servo 명령에 <code>mc_interface_get_motor_dir()</code> 적용.<br>
+  <strong>출력 반전 (RX):</strong> 모든 응답의 <code>vel_dps</code> (Motor Speed) 필드에 방향 반전 적용.<br>
+  <strong>비반전:</strong> Torque (0xA1), Duty (0xA5), eRPM (0xA2 mode=1)은 <code>mc_interface_*</code> API를 경유하므로 내부에서 자동 반전됨. MIT의 Kp/Kd 게인은 항상 양수이므로 반전 안함.
+</div>
 
 <h3>Motor Status Response Format <span class="new-badge">NEW in v9</span></h3>
 <p class="cmd-desc">공통 응답 포맷 &mdash; <code>0xA1</code>~<code>0xA4</code>, <code>0x9C</code>, <code>0xC0</code> 명령에 공통 적용</p>
@@ -463,6 +482,9 @@
   <tr class="new-row"><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr class="new-row"><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr class="new-row"><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr class="new-row"><td><strong>Read MIT Params</strong></td><td>0xC4</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr class="new-row"><td><strong>Write MIT Params to ROM</strong></td><td>0xC5</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_input (uint16)</td><td colspan="2">GR (uint16)</td></tr>
+  <tr class="new-row"><td><strong>Read External Sensor</strong></td><td>0xD0</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
 </table>
 
 <h2>RX CAN Protocols Summary</h2>
@@ -494,6 +516,9 @@
   <tr class="new-row"><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
   <tr class="new-row"><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
   <tr class="new-row"><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
+  <tr class="new-row"><td><strong>Read MIT Params</strong></td><td>0xC4</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_out (uint16)</td><td colspan="2">GR (uint16)</td></tr>
+  <tr class="new-row"><td><strong>Write MIT Params to ROM</strong></td><td>0xC5</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_out (uint16)</td><td colspan="2">GR (uint16)</td></tr>
+  <tr class="new-row"><td><strong>Read External Sensor</strong></td><td>0xD0</td><td>valid</td><td colspan="2">Temperature</td><td colspan="2">Pressure</td><td colspan="2">Atmosphere</td></tr>
 </table>
 
 <!-- ============================================================ -->
@@ -528,6 +553,9 @@
   <tr class="new-row"><td><code>0xC1</code></td><td>MIT Enter Motor Mode &nbsp;<span style="color:#28a745; font-size:11px;">NEW</span></td><td class="type-control">Control</td><td>No (ACK)</td></tr>
   <tr class="new-row"><td><code>0xC2</code></td><td>MIT Exit Motor Mode &nbsp;<span style="color:#28a745; font-size:11px;">NEW</span></td><td class="type-control">Control</td><td>No (ACK)</td></tr>
   <tr class="new-row"><td><code>0xC3</code></td><td>MIT Set Zero Position &nbsp;<span style="color:#28a745; font-size:11px;">NEW</span></td><td class="type-write">Write</td><td>No (ACK)</td></tr>
+  <tr class="new-row"><td><code>0xC4</code></td><td>Read MIT Params &nbsp;<span style="color:#28a745; font-size:11px;">NEW v12</span></td><td class="type-read">Read</td><td>No (MIT params)</td></tr>
+  <tr class="new-row"><td><code>0xC5</code></td><td>Write MIT Params to ROM &nbsp;<span style="color:#28a745; font-size:11px;">NEW v12</span></td><td class="type-write">Write</td><td>No (echo as 0xC4)</td></tr>
+  <tr class="new-row"><td><code>0xD0</code></td><td>Read External Sensor &nbsp;<span style="color:#28a745; font-size:11px;">NEW v12</span></td><td class="type-read">Read</td><td>No (sensor data)</td></tr>
 </table>
 
 <!-- ============================================================ -->
@@ -697,6 +725,7 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
   <tr><td>9</td><td>DPS_CONTROL_DURATION</td><td>0xA2 Speed (mode=0) / 0x81 Stop</td></tr>
   <tr style="background: #dbeafe;"><td><strong>10</strong></td><td><strong>SERVO_CONTROL</strong></td><td><strong>0xA4 / or_limit redirect</strong></td></tr>
   <tr><td>11</td><td>TRAJ_CONTROL</td><td>Trajectory</td></tr>
+  <tr style="background: var(--new-bg);"><td><strong>12</strong></td><td><strong>MIT_CONTROL_MODE</strong></td><td><strong>0xC0 MIT Control</strong> <span style="color:#28a745; font-size:11px;">NEW v12</span></td></tr>
 </table>
 
 <div class="new-box">
@@ -1349,15 +1378,15 @@ Without protection, a large position step causes the PID to output maximum curre
 <div class="note-box">
   <div class="note-title">MIT 제어 사용 순서</div>
   <ol style="margin-top: 8px; padding-left: 20px;">
-    <li><code>0xC3</code> <strong>Set Zero Position</strong> &mdash; 현재 위치를 영점으로 설정 (EEPROM 저장 + multiturn 리셋). 모터가 구동 중이면 <strong>먼저 Exit Motor Mode (0xC2)를 보낸 후</strong> Set Zero를 보내야 점프를 방지할 수 있다.</li>
+    <li><code>0xC3</code> <strong>Set Zero Position</strong> &mdash; 현재 위치를 MIT 영점으로 설정 (런타임 오프셋, EEPROM 비저장). MIT 제어 중에도 전송 가능 &mdash; 20ms hold counter가 잔류 CAN 명령을 무시하여 토크 스파이크를 방지한다.</li>
     <li><code>0xC1</code> <strong>Enter Motor Mode</strong> &mdash; 모터 Enable (전류 제어 활성화)</li>
     <li><code>0xC0</code> <strong>MIT Control</strong> &mdash; 주기적 전송 (50~500Hz 권장). 매 프레임마다 5개 파라미터 업데이트.</li>
     <li><code>0xC2</code> <strong>Exit Motor Mode</strong> &mdash; 제어 종료, 모터 Release (전류 0)</li>
   </ol>
 </div>
 
-<div class="warning">
-  <strong>Set Zero 주의사항:</strong> MIT 제어 도중 <code>0xC3</code>을 보내면, 엔코더가 리셋되지만 FW의 <code>m_mit_p_des</code>(이전 목표 위치)가 남아있어 모터가 급격히 회전할 수 있다. 반드시 <code>0xC2</code> (Exit) → <code>0xC3</code> (Set Zero) 순서로 전송할 것.
+<div class="info">
+  <strong>v12 변경:</strong> Set Zero (<code>0xC3</code>)는 이제 런타임 오프셋만 설정하며 EEPROM에 저장하지 않는다. MIT 제어 중에도 안전하게 전송할 수 있다 (20ms hold counter). 엔코더 물리적 영점은 <code>0x19</code> (Write Current Pos as Zero)를 사용할 것.
 </div>
 
 <!-- ── Feedback Variables ── -->
@@ -1440,13 +1469,81 @@ Without protection, a large position step causes the PID to output maximum curre
 
 <!-- 0xC3 -->
 <hr>
-<h3><span class="cmd-id">0xC3</span> MIT Set Zero Position <span class="new-badge">NEW</span></h3>
-<p class="cmd-desc">현재 위치를 영점으로 설정. CubeMars 프로토콜의 Set Zero Position (0xFE)에 해당. 엔코더 오프셋을 EEPROM에 저장하고 multi-turn 누적 각도도 리셋.</p>
+<h3><span class="cmd-id">0xC3</span> MIT Set Zero Position <span class="new-badge">UPDATED v12</span></h3>
+<p class="cmd-desc">MIT 제어의 현재 위치를 영점으로 설정. CubeMars 프로토콜의 Set Zero Position (0xFE)에 해당.</p>
 
 <div class="tx-frame"><span class="tx-label">TX:</span> [0xC3, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
 <div class="tx-frame"><span class="tx-label">RX:</span> [0xC3, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
 
-<div class="warning">EEPROM 쓰기 포함. 100Hz 이상 반복 전송 금지. <code>0x19</code> (Write Current Pos as Zero)와 동일한 내부 동작.</div>
+<div class="new-box">
+  <strong>v12 변경:</strong> 런타임 오프셋만 적용 (EEPROM 쓰기 제거). <code>m_mit_pos_offset_deg</code>를 현재 <code>pos_accum</code>으로 설정하여 p_act=0부터 시작. 20ms hold counter로 Set Zero 직후 잔류 CAN 명령에 의한 토크 스파이크 방지. 엔코더 물리적 영점 설정은 별도 <code>0x19</code> (Write Current Pos as Zero) 명령을 사용할 것.
+</div>
+
+<!-- 0xC4 / 0xC5 -->
+<hr>
+<h3><span class="cmd-id">0xC4</span> Read MIT Params / <span class="cmd-id">0xC5</span> Write MIT Params to ROM <span class="new-badge">NEW v12</span></h3>
+<p class="cmd-desc">MIT 제어 파라미터 (V_MAX, T_MAX, Kt, Gear Ratio) 읽기/쓰기. EEPROM에 영구 저장.</p>
+
+<p><strong>TX (Read):</strong></p>
+<div class="tx-frame"><span class="tx-label">TX:</span> [0xC4, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+
+<p><strong>TX (Write):</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0xC5</td><td>uint8</td><td>Command</td></tr>
+  <tr><td><code>DATA[1]</code></td><td>V_MAX</td><td>uint8</td><td>Max velocity range (rad/s), default 45</td></tr>
+  <tr><td><code>DATA[2]</code></td><td>T_MAX</td><td>uint8</td><td>Max torque range (A), default 33</td></tr>
+  <tr><td><code>DATA[3-4]</code></td><td>Kt_input</td><td>uint16 LE</td><td>&times;0.001 Nm/A (motor-side). 0 = auto from MCCONF</td></tr>
+  <tr><td><code>DATA[5-6]</code></td><td>Gear Ratio</td><td>uint16 LE</td><td>&times;0.01 (예: 900 = 9.0)</td></tr>
+  <tr><td><code>DATA[7]</code></td><td>Reserved</td><td>-</td><td>0x00</td></tr>
+</table>
+
+<p><strong>RX (공통 &mdash; 0xC4 Read 및 0xC5 Write 모두):</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0xC4</td><td>uint8</td><td>항상 0xC4 (Read/Write 모두)</td></tr>
+  <tr><td><code>DATA[1]</code></td><td>V_MAX</td><td>uint8</td><td>현재 V_MAX (rad/s)</td></tr>
+  <tr><td><code>DATA[2]</code></td><td>T_MAX</td><td>uint8</td><td>현재 T_MAX (A)</td></tr>
+  <tr><td><code>DATA[3-4]</code></td><td>Kt_out</td><td>uint16 LE</td><td>&times;0.001 Nm/A (<strong>output-side</strong> = Kt_input &times; GR)</td></tr>
+  <tr><td><code>DATA[5-6]</code></td><td>Gear Ratio</td><td>uint16 LE</td><td>&times;0.01</td></tr>
+  <tr><td><code>DATA[7]</code></td><td>Reserved</td><td>-</td><td>0x00</td></tr>
+</table>
+
+<div class="note-box">
+  <div class="note-title">부연설명 &mdash; Kt_input vs Kt_out</div>
+  <strong>Write (0xC5)</strong>에서는 모터단 <code>Kt_input</code>을 보내고, <strong>Read (0xC4) 응답</strong>에서는 출력단 <code>Kt_out = Kt_input &times; GR</code>을 반환한다.
+  Kt_input=0으로 보내면 MCCONF의 <code>flux_linkage</code>와 <code>pole_pairs</code>에서 자동 계산된다 (<code>Kt = 1.5 &times; (p/2) &times; flux</code>).<br><br>
+  <strong>MIT 제어 법칙 (출력단 Nm):</strong><br>
+  <code>&tau;_out = Kp &times; (p_des &minus; p_act/GR) + Kd &times; (v_des &minus; v_act/GR) + &tau;_ff</code> &rarr; <code>iq = &tau;_out / Kt_out</code>
+</div>
+
+<div class="warning">EEPROM 쓰기 포함. 100Hz 이상 반복 전송 금지.</div>
+
+<!-- 0xD0 -->
+<hr>
+<h3><span class="cmd-id">0xD0</span> Read External Sensor <span class="new-badge">NEW v12</span></h3>
+<p class="cmd-desc">외부 센서 데이터 읽기. CAN &rarr; RS485 &rarr; XIAO RA4M1 &rarr; I2C &rarr; MS5803 경로로 온도/압력/기압을 읽는다. 응답까지 최대 500ms 소요.</p>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0xD0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+
+<p><strong>RX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Unit</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0xD0</td><td>uint8</td><td>&mdash;</td><td>Echo</td></tr>
+  <tr><td><code>DATA[1]</code></td><td>Valid</td><td>uint8</td><td>0/1</td><td>1 = 유효한 데이터</td></tr>
+  <tr><td><code>DATA[2-3]</code></td><td>Temperature</td><td>int16 LE</td><td>0.01 &deg;C / LSB</td><td>예: 2350 = 23.50&deg;C</td></tr>
+  <tr><td><code>DATA[4-5]</code></td><td>Pressure</td><td>uint16 LE</td><td>1 mbar / LSB</td><td>예: 1013 = 1013 mbar</td></tr>
+  <tr><td><code>DATA[6-7]</code></td><td>Atmosphere</td><td>uint16 LE</td><td>0.0001 atm / LSB</td><td>예: 10000 = 1.0000 atm</td></tr>
+</table>
+
+<div class="note-box">
+  <div class="note-title">부연설명 &mdash; 외부 센서 구조</div>
+  VESC 제어기의 USART3 (RS485, half-duplex)를 통해 외부 XIAO RA4M1 보드에 센서 데이터를 요청한다.
+  XIAO는 I2C로 연결된 MS5803 수압/기압 센서의 온도/압력을 읽어 텍스트 프로토콜 (<code>$SNS,temp,pres,atm\n</code>)로 응답한다.<br><br>
+  <strong>주의:</strong> RS485 half-duplex 통신 특성상 응답까지 최대 500ms가 소요될 수 있으며, XIAO 보드가 연결되지 않은 경우 Valid=0이 반환된다.
+</div>
+
+<hr>
 
 <h3>CubeMars 프로토콜 매핑</h3>
 <table>
@@ -1682,6 +1779,7 @@ Without protection, a large position step causes the PID to output maximum curre
   <tr><th>Encoder</th><th>Resolution</th><th>CPR</th><th>Note</th></tr>
   <tr><td>AS5047</td><td>14-bit</td><td>16,384</td><td>CAN SID 프레임과 동일 해상도</td></tr>
   <tr><td>MT6835</td><td>21-bit</td><td>2,097,152</td><td>CAN SID에서는 14-bit로 정규화하여 전송</td></tr>
+  <tr style="background: var(--new-bg);"><td><strong>RLS AksIM-2</strong></td><td>20-bit</td><td>1,048,576</td><td>BiSS-C 인터페이스. CAN SID에서는 14-bit로 정규화 <span style="color:#28a745; font-size:11px;">NEW v12</span></td></tr>
 </table>
 
 <div class="warning">
@@ -1716,10 +1814,15 @@ Without protection, a large position step causes the PID to output maximum curre
     <td>2026-02-11</td>
     <td>VESC EID Protocol section added. Encoder native resolution (AS5047 14-bit / MT6835 21-bit) with uint64_t overflow fix. COMM_REBOOT HardFault bug fixed. CAN firmware/bootloader upload. Position/Speed PID via MCCONF EID.</td>
   </tr>
-  <tr style="background: var(--new-bg); font-weight: 600;">
+  <tr>
     <td>v11</td>
     <td>2026-02-23</td>
     <td>MIT Control Protocol added (0xC0~0xC3). CubeMars AK compatible impedance control: position/velocity/Kp/Kd/torque_ff packed in 7 bytes. Enter/Exit Motor Mode and Set Zero Position commands. Control loop architecture, parameter descriptions, usage patterns documented. Duty Closed-Loop (0xA5) added.</td>
+  </tr>
+  <tr style="background: var(--new-bg); font-weight: 600;">
+    <td>v12</td>
+    <td>2026-03-05</td>
+    <td>MIT Parameter R/W (0xC4/0xC5) added: V_MAX, T_MAX, Kt, GR EEPROM read/write. External Sensor (0xD0) added: MS5803 temperature/pressure via RS485. <code>m_invert_direction</code> support at CAN boundary (all control inputs + vel_dps responses). MIT Set Zero (0xC3) changed to runtime-only offset (no EEPROM, 20ms hold counter). RMD&rarr;MIT transition auto-capture offset. RLS AksIM-2 20-bit encoder support added.</td>
   </tr>
 </table>
 
@@ -1727,7 +1830,7 @@ Without protection, a large position step causes the PID to output maximum curre
 <!-- FOOTER -->
 <!-- ============================================================ -->
 <div class="doc-footer">
-  OpenRobot Motor CAN Protocol &mdash; OpenRobot MC v11 &nbsp;|&nbsp; DRCL / OpenRobot &nbsp;|&nbsp; 2026-02-23
+  OpenRobot Motor CAN Protocol &mdash; OpenRobot MC v12 &nbsp;|&nbsp; DRCL / OpenRobot &nbsp;|&nbsp; 2026-03-05
 </div>
 
 </body>
