@@ -10,7 +10,10 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['PyQt5', 'PySide6'],
+    excludes=['PyQt5', 'PySide6', 'torch', 'torchvision', 'torchaudio',
+              'tensorflow', 'onnxruntime', 'scipy', 'sympy', 'IPython',
+              'jupyter', 'notebook', 'numba', 'llvmlite', 'jedi',
+              'matplotlib', 'tkinter', 'PIL'],
     noarchive=False,
     optimize=0,
 )
