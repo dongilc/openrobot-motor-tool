@@ -11,7 +11,7 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=['PyQt5', 'PySide6', 'torch', 'torchvision', 'torchaudio',
-              'tensorflow', 'onnxruntime', 'scipy', 'sympy', 'IPython',
+              'tensorflow', 'onnxruntime', 'sympy', 'IPython',
               'jupyter', 'notebook', 'numba', 'llvmlite', 'jedi',
               'matplotlib', 'tkinter', 'PIL'],
     noarchive=False,
