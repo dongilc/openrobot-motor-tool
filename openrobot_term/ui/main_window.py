@@ -23,12 +23,15 @@ from .experiment_tab import ExperimentTab
 from .can_control_tab import CanControlTab
 from .can_data_tab import CanDataTab
 from .can_position_tuning_tab import CanPositionTuningTab
+from .ms5803_tab import Ms5803Tab
+from .rls_health_tab import RlsHealthTab
+from .can_bus_health_tab import CanBusHealthTab
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("OpenRobot Motor Tool V2.2 (PCAN Only)")
+        self.setWindowTitle("OpenRobot Motor Tool V2.3 (PCAN Only)")
 
         self.can_transport = PcanTransport()
 
@@ -65,6 +68,9 @@ class MainWindow(QMainWindow):
         self.position_tab = PositionTab(self.can_transport)
         self.waveform_tab = WaveformTab(self.can_transport)
         self.analysis_tab = CanPositionTuningTab(self.can_transport)
+        self.ms5803_tab = Ms5803Tab(self.can_transport)
+        self.rls_health_tab = RlsHealthTab(self.can_transport)
+        self.can_bus_health_tab = CanBusHealthTab(self.can_transport)
         self.firmware_tab = FirmwareTab(self.can_transport)
 
         self.tabs.addTab(self.parameter_tab, "Parameter")
@@ -74,6 +80,9 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.position_tab, "Position")
         self.tabs.addTab(self.waveform_tab, "Waveform")
         self.tabs.addTab(self.analysis_tab, "AI Analysis")
+        self.tabs.addTab(self.ms5803_tab, "MS5803")
+        self.tabs.addTab(self.rls_health_tab, "RLS Health")
+        self.tabs.addTab(self.can_bus_health_tab, "CAN Bus Health")
         self.tabs.addTab(self.firmware_tab, "Firmware")
 
         # Right dock spans full height (top-right & bottom-right corners belong to right)
@@ -287,6 +296,8 @@ class MainWindow(QMainWindow):
             self.experiment_tab.cleanup()
             self.position_tab.cleanup()
             self.can_control_tab.cleanup()
+            self.ms5803_tab.cleanup()
+            self.can_bus_health_tab.cleanup()
 
     def _create_debug_panel(self) -> QWidget:
         """Create the CAN debug panel."""
@@ -341,5 +352,8 @@ class MainWindow(QMainWindow):
         self.analysis_tab.cleanup()
         self.can_control_tab.cleanup()
         self.can_data_tab.cleanup()
+        self.ms5803_tab.cleanup()
+        self.rls_health_tab.cleanup()
+        self.can_bus_health_tab.cleanup()
         self.can_transport.disconnect()
         event.accept()

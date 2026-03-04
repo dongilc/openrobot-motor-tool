@@ -21,6 +21,8 @@ from ..protocol.can_commands import (
     build_motor_off, build_motor_stop, build_motor_start,
     build_duty_closed_loop,
     build_mit_control, build_mit_enter, build_mit_exit, build_mit_set_zero,
+    build_read_mit_params, build_write_mit_params,
+    MIT_V_MAX_DEFAULT, MIT_T_MAX_DEFAULT,
 )
 from ..protocol.commands import (
     VescValues, build_set_duty, build_set_current,
@@ -50,6 +52,7 @@ class CanControlTab(QWidget):
         # Wire signals — live feedback from both polling (0x9C) and control responses (0xA1-A4)
         self._transport.status_received.connect(self._on_status_received)
         self._transport.cmd_status_received.connect(self._on_status_received)
+        self._transport.mit_params_received.connect(self._on_mit_params_received)
 
     def _build_ui(self):
         outer = QVBoxLayout(self)
@@ -623,6 +626,63 @@ class CanControlTab(QWidget):
         mit_zero_row.addWidget(mit_zero_btn)
         mit_zero_row.addStretch()
 
+        # ── MIT Parameter Settings group ──
+        self._mit_v_max = MIT_V_MAX_DEFAULT
+        self._mit_t_max = MIT_T_MAX_DEFAULT
+
+        mit_param_group = QGroupBox("MIT Mode Parameters")
+        mpl = QGridLayout(mit_param_group)
+        mpl.setSpacing(4)
+
+        mpl.addWidget(QLabel("V_MAX (rad/s):"), 0, 0)
+        self.mit_vmax_spin = QDoubleSpinBox()
+        self.mit_vmax_spin.setRange(0.1, 200.0)
+        self.mit_vmax_spin.setSingleStep(1.0)
+        self.mit_vmax_spin.setDecimals(1)
+        self.mit_vmax_spin.setValue(MIT_V_MAX_DEFAULT)
+        mpl.addWidget(self.mit_vmax_spin, 0, 1)
+
+        mpl.addWidget(QLabel("T_MAX (Nm):"), 1, 0)
+        self.mit_tmax_spin = QDoubleSpinBox()
+        self.mit_tmax_spin.setRange(0.1, 200.0)
+        self.mit_tmax_spin.setSingleStep(1.0)
+        self.mit_tmax_spin.setDecimals(1)
+        self.mit_tmax_spin.setValue(MIT_T_MAX_DEFAULT)
+        mpl.addWidget(self.mit_tmax_spin, 1, 1)
+
+        mpl.addWidget(QLabel("Gear Ratio:"), 2, 0)
+        self.mit_gr_spin = QDoubleSpinBox()
+        self.mit_gr_spin.setRange(0.01, 655.0)
+        self.mit_gr_spin.setSingleStep(0.1)
+        self.mit_gr_spin.setDecimals(2)
+        self.mit_gr_spin.setValue(1.0)
+        mpl.addWidget(self.mit_gr_spin, 2, 1)
+
+        mpl.addWidget(QLabel("Kt motor (Nm/A, 0=auto):"), 3, 0)
+        self.mit_kt_spin = QDoubleSpinBox()
+        self.mit_kt_spin.setRange(0.0, 10.0)
+        self.mit_kt_spin.setSingleStep(0.001)
+        self.mit_kt_spin.setDecimals(4)
+        self.mit_kt_spin.setValue(0.0)
+        mpl.addWidget(self.mit_kt_spin, 3, 1)
+
+        mpl.addWidget(QLabel("Kt out (Nm/A, read-only):"), 4, 0)
+        self.mit_kt_out_label = QLabel("--")
+        self.mit_kt_out_label.setStyleSheet("font-family: monospace; font-weight: bold;")
+        mpl.addWidget(self.mit_kt_out_label, 4, 1)
+
+        mit_param_btn_row = QHBoxLayout()
+        mit_read_btn = QPushButton("Read Params")
+        mit_read_btn.clicked.connect(self._on_mit_read_params)
+        mit_param_btn_row.addWidget(mit_read_btn)
+        mit_write_btn = QPushButton("Write to ROM")
+        mit_write_btn.clicked.connect(self._on_mit_write_params)
+        mit_param_btn_row.addWidget(mit_write_btn)
+        mit_param_btn_row.addStretch()
+        mpl.addLayout(mit_param_btn_row, 5, 0, 1, 2)
+
+        mit_layout.addWidget(mit_param_group)
+
         # MIT Impedance Control group
         mit_ctrl_group = QGroupBox("MIT Impedance Control (0xC0)")
         mcl = QVBoxLayout(mit_ctrl_group)
@@ -632,7 +692,7 @@ class CanControlTab(QWidget):
         mp_row = QHBoxLayout()
         mp_row.addWidget(QLabel("Position (rad):"))
         self.mit_p_spin = QDoubleSpinBox()
-        self.mit_p_spin.setRange(-12.5, 12.5)
+        self.mit_p_spin.setRange(-12.56, 12.56)
         self.mit_p_spin.setSingleStep(0.1)
         self.mit_p_spin.setDecimals(3)
         self.mit_p_spin.setMinimumHeight(32)
@@ -644,16 +704,17 @@ class CanControlTab(QWidget):
         mp_row.addWidget(_p_zero)
         mcl.addLayout(mp_row)
         self.mit_p_slider = QSlider(Qt.Orientation.Horizontal)
-        self.mit_p_slider.setRange(-12500, 12500)
+        self.mit_p_slider.setRange(-12560, 12560)
         self.mit_p_slider.valueChanged.connect(lambda v: self.mit_p_spin.setValue(v / 1000.0))
         self.mit_p_spin.valueChanged.connect(lambda v: self.mit_p_slider.setValue(int(v * 1000)))
         mcl.addWidget(self.mit_p_slider)
 
-        # Velocity (rad/s)
+        # Velocity (rad/s) — dynamic range
         mv_row = QHBoxLayout()
-        mv_row.addWidget(QLabel("Velocity (rad/s):"))
+        self.mit_v_label = QLabel("Velocity (rad/s):")
+        mv_row.addWidget(self.mit_v_label)
         self.mit_v_spin = QDoubleSpinBox()
-        self.mit_v_spin.setRange(-76.0, 76.0)
+        self.mit_v_spin.setRange(-MIT_V_MAX_DEFAULT, MIT_V_MAX_DEFAULT)
         self.mit_v_spin.setSingleStep(1.0)
         self.mit_v_spin.setDecimals(2)
         self.mit_v_spin.setMinimumHeight(32)
@@ -665,14 +726,14 @@ class CanControlTab(QWidget):
         mv_row.addWidget(_v_zero)
         mcl.addLayout(mv_row)
         self.mit_v_slider = QSlider(Qt.Orientation.Horizontal)
-        self.mit_v_slider.setRange(-7600, 7600)
+        self.mit_v_slider.setRange(int(-MIT_V_MAX_DEFAULT * 100), int(MIT_V_MAX_DEFAULT * 100))
         self.mit_v_slider.valueChanged.connect(lambda v: self.mit_v_spin.setValue(v / 100.0))
         self.mit_v_spin.valueChanged.connect(lambda v: self.mit_v_slider.setValue(int(v * 100)))
         mcl.addWidget(self.mit_v_slider)
 
-        # Kp (A/rad)
+        # Kp (Nm/rad)
         mkp_row = QHBoxLayout()
-        mkp_row.addWidget(QLabel("Kp (A/rad):"))
+        mkp_row.addWidget(QLabel("Kp (Nm/rad):"))
         self.mit_kp_spin = QDoubleSpinBox()
         self.mit_kp_spin.setRange(0.0, 500.0)
         self.mit_kp_spin.setSingleStep(1.0)
@@ -692,9 +753,9 @@ class CanControlTab(QWidget):
         self.mit_kp_spin.valueChanged.connect(lambda v: self.mit_kp_slider.setValue(int(v * 10)))
         mcl.addWidget(self.mit_kp_slider)
 
-        # Kd (A*s/rad)
+        # Kd (Nm·s/rad)
         mkd_row = QHBoxLayout()
-        mkd_row.addWidget(QLabel("Kd (A*s/rad):"))
+        mkd_row.addWidget(QLabel("Kd (Nm*s/rad):"))
         self.mit_kd_spin = QDoubleSpinBox()
         self.mit_kd_spin.setRange(0.0, 5.0)
         self.mit_kd_spin.setSingleStep(0.01)
@@ -714,11 +775,12 @@ class CanControlTab(QWidget):
         self.mit_kd_spin.valueChanged.connect(lambda v: self.mit_kd_slider.setValue(int(v * 1000)))
         mcl.addWidget(self.mit_kd_slider)
 
-        # Torque FF (A)
+        # Torque FF (Nm) — dynamic range
         mt_row = QHBoxLayout()
-        mt_row.addWidget(QLabel("Torque FF (A):"))
+        self.mit_tff_label = QLabel("Torque FF (Nm):")
+        mt_row.addWidget(self.mit_tff_label)
         self.mit_tff_spin = QDoubleSpinBox()
-        self.mit_tff_spin.setRange(-33.0, 33.0)
+        self.mit_tff_spin.setRange(-MIT_T_MAX_DEFAULT, MIT_T_MAX_DEFAULT)
         self.mit_tff_spin.setSingleStep(0.1)
         self.mit_tff_spin.setDecimals(2)
         self.mit_tff_spin.setMinimumHeight(32)
@@ -730,7 +792,7 @@ class CanControlTab(QWidget):
         mt_row.addWidget(_tff_zero)
         mcl.addLayout(mt_row)
         self.mit_tff_slider = QSlider(Qt.Orientation.Horizontal)
-        self.mit_tff_slider.setRange(-3300, 3300)
+        self.mit_tff_slider.setRange(int(-MIT_T_MAX_DEFAULT * 100), int(MIT_T_MAX_DEFAULT * 100))
         self.mit_tff_slider.valueChanged.connect(lambda v: self.mit_tff_spin.setValue(v / 100.0))
         self.mit_tff_spin.valueChanged.connect(lambda v: self.mit_tff_slider.setValue(int(v * 100)))
         mcl.addWidget(self.mit_tff_slider)
@@ -970,7 +1032,8 @@ class CanControlTab(QWidget):
             self._broadcast_or_solo_rmd(build_mit_control(
                 self.mit_p_spin.value(), self.mit_v_spin.value(),
                 self.mit_kp_spin.value(), self.mit_kd_spin.value(),
-                self.mit_tff_spin.value()
+                self.mit_tff_spin.value(),
+                v_max=self._mit_v_max, t_max=self._mit_t_max,
             ))
 
         # VESC EID modes
@@ -1054,7 +1117,8 @@ class CanControlTab(QWidget):
             self._broadcast_or_solo_rmd(build_mit_control(
                 self.mit_p_spin.value(), self.mit_v_spin.value(),
                 self.mit_kp_spin.value(), self.mit_kd_spin.value(),
-                self.mit_tff_spin.value()
+                self.mit_tff_spin.value(),
+                v_max=self._mit_v_max, t_max=self._mit_t_max,
             ))
 
     def _on_vesc_duty_value_changed(self):
@@ -1074,16 +1138,64 @@ class CanControlTab(QWidget):
             self._broadcast_or_solo_vesc(build_set_pos(self.vesc_pos_spin.value()))
 
     def _on_mit_set_zero(self):
-        """Set Zero Pos: stop MIT loop, exit motor mode, zero position, then set-zero."""
-        # 1) Stop periodic MIT send
-        if self._active_mode == "mit":
-            self._stop_loop()
-        # 2) Exit motor mode — release motor so FW clears MIT control
-        self._send_once(build_mit_exit())
-        # 3) Reset position spinbox to 0
+        """Set Zero Pos: set current position as zero without releasing motor."""
+        # 1) Reset position spinbox to 0
         self.mit_p_spin.setValue(0.0)
-        # 4) Send set zero command to FW
+        # 2) Send set zero command to FW (keeps control mode active)
         self._send_once(build_mit_set_zero())
+
+    def _on_mit_read_params(self):
+        """Read MIT params (0xC4) and update UI ranges."""
+        if not self._transport.is_connected():
+            QMessageBox.warning(self, "Not connected", "Open PCAN connection first.")
+            return
+        self._send_once(build_read_mit_params())
+
+    def _on_mit_write_params(self):
+        """Write MIT params (0xC5) to EEPROM."""
+        if not self._transport.is_connected():
+            QMessageBox.warning(self, "Not connected", "Open PCAN connection first.")
+            return
+        v_max = self.mit_vmax_spin.value()
+        t_max = self.mit_tmax_spin.value()
+        kt_input = self.mit_kt_spin.value()
+        gr = self.mit_gr_spin.value()
+        self._send_once(build_write_mit_params(v_max, t_max, kt_input, gr))
+        # Response (0xC4) will be handled by _on_mit_params_received
+
+    def _on_mit_params_received(self, motor_id: int, params: dict):
+        """Handle READ_MIT_PARAMS (0xC4) response from FW."""
+        self.mit_vmax_spin.setValue(params['v_max'])
+        self.mit_tmax_spin.setValue(params['t_max'])
+        self.mit_gr_spin.setValue(params['gear_ratio'])
+        # Kt_out is read-only display (computed by FW = Kt_input × GR)
+        kt_out = params['kt_out']
+        self.mit_kt_out_label.setText(f"{kt_out:.4f}")
+        # Derive Kt_input from Kt_out / GR for the editable spinbox
+        gr = params['gear_ratio']
+        if gr > 0.01:
+            self.mit_kt_spin.setValue(kt_out / gr)
+        self._apply_mit_ranges(params['v_max'], params['t_max'])
+
+    def _apply_mit_ranges(self, v_max: float, t_max: float):
+        """Update velocity/torque spinbox and slider ranges from EEPROM params."""
+        self._mit_v_max = v_max
+        self._mit_t_max = t_max
+        # Block signals to prevent accidental sends while changing ranges
+        self.mit_v_spin.blockSignals(True)
+        self.mit_v_slider.blockSignals(True)
+        self.mit_tff_spin.blockSignals(True)
+        self.mit_tff_slider.blockSignals(True)
+
+        self.mit_v_spin.setRange(-v_max, v_max)
+        self.mit_v_slider.setRange(int(-v_max * 100), int(v_max * 100))
+        self.mit_tff_spin.setRange(-t_max, t_max)
+        self.mit_tff_slider.setRange(int(-t_max * 100), int(t_max * 100))
+
+        self.mit_v_spin.blockSignals(False)
+        self.mit_v_slider.blockSignals(False)
+        self.mit_tff_spin.blockSignals(False)
+        self.mit_tff_slider.blockSignals(False)
 
     def _send_once(self, data: bytes):
         if not self._transport.is_connected():

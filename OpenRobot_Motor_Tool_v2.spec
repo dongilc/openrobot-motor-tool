@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='OpenRobot_Motor_Tool_v2.2',
+    name='OpenRobot_Motor_Tool_v2.3',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -357,10 +357,10 @@ class CanDataTab(QWidget):
         for grp in (enc_group, pid_group, curr_group, diag_group):
             grp.setMaximumHeight(140)
 
-        top.setColumnStretch(0, 2)
-        top.setColumnStretch(1, 2)
-        top.setColumnStretch(2, 2)
-        top.setColumnStretch(3, 3)
+        top.setColumnStretch(0, 5)   # Encoder
+        top.setColumnStretch(1, 4)   # PID (narrower)
+        top.setColumnStretch(2, 4)   # Current (narrower)
+        top.setColumnStretch(3, 7)   # Fault Log (wider)
 
         # ═══ Graph controls bar ═══
         ctrl = QHBoxLayout()

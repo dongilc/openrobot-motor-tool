@@ -45,10 +45,14 @@ class RmdCommand(IntEnum):
     READ_FAULT_CODE = 0xB0
     READ_MAX_CURRENT = 0xB1
     WRITE_MAX_CURRENT_TO_ROM = 0xB2
+    READ_ENCODER_STATUS = 0x9E
     MIT_CONTROL = 0xC0
     MIT_ENTER_MOTOR_MODE = 0xC1
     MIT_EXIT_MOTOR_MODE = 0xC2
     MIT_SET_ZERO_POS = 0xC3
+    READ_MIT_PARAMS = 0xC4
+    WRITE_MIT_PARAMS_TO_ROM = 0xC5
+    READ_EXT_SENSOR = 0xD0
 
 
 # Fault broadcast marker (sent by firmware on fault, SID = 0x140 + motor_id)
@@ -143,11 +147,30 @@ class RmdPid:
 
 
 @dataclass
+class RmdEncoderHealth:
+    airgap_um: float        # micrometers
+    signal_level: int       # raw EncoLink value
+    spi_error_rate: float   # 0.0~1.0
+    crc_ok: bool
+    error: bool             # encoder error flag (red LED)
+    warning: bool           # encoder warning flag
+
+
+@dataclass
 class RmdMaxCurrent:
     drv8301_oc_mode: int
     motor_current_max: float
     motor_current_abs_max: float
     bat_current_max: float
+
+
+@dataclass
+class ExtSensorData:
+    """READ_EXT_SENSOR (0xD0) response: MS5803 via RS485."""
+    valid: bool
+    temperature: float   # celsius
+    pressure: float      # mbar
+    atm: float           # sea-level atm ratio
 
 
 # ── Signed integer helpers (two's complement) ──────────────────────
@@ -300,12 +323,35 @@ def build_duty_closed_loop(duty: float) -> bytes:
     return bytes([RmdCommand.DUTY_CLOSED_LOOP, 0, 0, 0, val & 0xFF, (val >> 8) & 0xFF, 0, 0])
 
 
+def build_read_encoder_status() -> bytes:
+    return bytes([RmdCommand.READ_ENCODER_STATUS, 0, 0, 0, 0, 0, 0, 0])
+
+
+def parse_encoder_health(data: list | bytes) -> RmdEncoderHealth:
+    """Parse READ_ENCODER_STATUS (0x9E) response."""
+    airgap = (data[2] << 8) | data[1]
+    sig = (data[4] << 8) | data[3]
+    err_raw = data[5]
+    crc = data[6]
+    flags = data[7] if len(data) > 7 else 0
+    # RLS AksIM-2: nError/nWarning are active-low (1=OK, 0=fault)
+    return RmdEncoderHealth(
+        airgap_um=float(airgap),
+        signal_level=sig,
+        spi_error_rate=err_raw / 200.0,
+        crc_ok=bool(crc),
+        error=not bool(flags & 0x01),
+        warning=not bool(flags & 0x02),
+    )
+
+
 # MIT parameter ranges (must match FW comm_can_rmd.h)
-MIT_P_MIN, MIT_P_MAX = -12.5, 12.5
-MIT_V_MIN, MIT_V_MAX = -76.0, 76.0
-MIT_KP_MIN, MIT_KP_MAX = 0.0, 500.0
-MIT_KD_MIN, MIT_KD_MAX = 0.0, 5.0
-MIT_T_MIN, MIT_T_MAX = -33.0, 33.0
+MIT_P_MIN, MIT_P_MAX = -12.56, 12.56     # fixed ±4π rad
+MIT_KP_MIN, MIT_KP_MAX = 0.0, 500.0      # Nm/rad
+MIT_KD_MIN, MIT_KD_MAX = 0.0, 5.0        # Nm·s/rad
+# V_MAX and T_MAX are runtime (EEPROM), defaults below
+MIT_V_MAX_DEFAULT = 45.0                  # rad/s
+MIT_T_MAX_DEFAULT = 33.0                  # Nm
 
 
 def _float_to_uint(x: float, x_min: float, x_max: float, bits: int) -> int:
@@ -314,13 +360,15 @@ def _float_to_uint(x: float, x_min: float, x_max: float, bits: int) -> int:
     return int((x - x_min) * ((1 << bits) - 1) / span)
 
 
-def build_mit_control(p_des: float, v_des: float, kp: float, kd: float, t_ff: float) -> bytes:
-    """MIT impedance control (0xC0). 7-byte bit-packed."""
+def build_mit_control(p_des: float, v_des: float, kp: float, kd: float, t_ff: float,
+                      v_max: float = MIT_V_MAX_DEFAULT,
+                      t_max: float = MIT_T_MAX_DEFAULT) -> bytes:
+    """MIT impedance control (0xC0). 7-byte bit-packed. v_max/t_max are runtime ranges."""
     p_raw  = _float_to_uint(p_des, MIT_P_MIN, MIT_P_MAX, 16)
-    v_raw  = _float_to_uint(v_des, MIT_V_MIN, MIT_V_MAX, 12)
+    v_raw  = _float_to_uint(v_des, -v_max, v_max, 12)
     kp_raw = _float_to_uint(kp, MIT_KP_MIN, MIT_KP_MAX, 12)
     kd_raw = _float_to_uint(kd, MIT_KD_MIN, MIT_KD_MAX, 8)
-    t_raw  = _float_to_uint(t_ff, MIT_T_MIN, MIT_T_MAX, 8)
+    t_raw  = _float_to_uint(t_ff, -t_max, t_max, 8)
     return bytes([
         RmdCommand.MIT_CONTROL,
         (p_raw >> 8) & 0xFF, p_raw & 0xFF,
@@ -345,6 +393,53 @@ def build_mit_exit() -> bytes:
 def build_mit_set_zero() -> bytes:
     """MIT Set Zero Position (0xC3)."""
     return bytes([RmdCommand.MIT_SET_ZERO_POS, 0, 0, 0, 0, 0, 0, 0])
+
+
+def build_read_mit_params() -> bytes:
+    """READ_MIT_PARAMS (0xC4): read V_MAX, T_MAX, Kt, GR from EEPROM."""
+    return bytes([RmdCommand.READ_MIT_PARAMS, 0, 0, 0, 0, 0, 0, 0])
+
+
+def build_write_mit_params(v_max: float, t_max: float, kt_input: float, gr: float) -> bytes:
+    """WRITE_MIT_PARAMS_TO_ROM (0xC5): write V_MAX, T_MAX, Kt_input, GR to EEPROM.
+    Frame: [cmd][v_max_u8][t_max_u8][kt_in_lo][kt_in_hi][gr_lo][gr_hi][0]
+    v_max: uint8 (1~255 rad/s), t_max: uint8 (1~255 Nm)
+    kt_input: motor-side Kt, uint16 × 0.001 Nm/A (0 = auto from mcconf)
+    gr: uint16 × 0.01"""
+    v_u8 = int(max(0, min(255, v_max)))
+    t_u8 = int(max(0, min(255, t_max)))
+    kt_u16 = int(kt_input * 1000.0)
+    gr_u16 = int(gr * 100.0)
+    return bytes([
+        RmdCommand.WRITE_MIT_PARAMS_TO_ROM,
+        v_u8,
+        t_u8,
+        kt_u16 & 0xFF, (kt_u16 >> 8) & 0xFF,
+        gr_u16 & 0xFF, (gr_u16 >> 8) & 0xFF,
+        0,
+    ])
+
+
+def parse_mit_params_response(data: bytes | list) -> dict:
+    """Parse READ_MIT_PARAMS (0xC4) response.
+    Response: [cmd][v_max_u8][t_max_u8][kt_out_lo][kt_out_hi][gr_lo][gr_hi][0]
+    kt_out: output-side Kt_out = Kt_input × GR (computed by FW)
+    Returns dict with v_max, t_max, kt_out, gear_ratio."""
+    v_max = float(data[1])
+    t_max = float(data[2])
+    kt_u16 = (data[4] << 8) | data[3]
+    gr_u16 = (data[6] << 8) | data[5]
+    return {
+        'v_max': v_max,
+        't_max': t_max,
+        'kt_out': kt_u16 * 0.001,
+        'gear_ratio': gr_u16 * 0.01,
+    }
+
+
+def build_read_ext_sensor() -> bytes:
+    """READ_EXT_SENSOR (0xD0): request MS5803 data via RS485."""
+    return bytes([RmdCommand.READ_EXT_SENSOR, 0, 0, 0, 0, 0, 0, 0])
 
 
 # ── Response parsers ───────────────────────────────────────────────
@@ -456,6 +551,22 @@ def parse_max_current(data: list | bytes) -> RmdMaxCurrent:
     )
 
 
+def parse_ext_sensor(data: list | bytes) -> ExtSensorData:
+    """Parse READ_EXT_SENSOR (0xD0) response.
+    Frame: [0xD0][valid][temp_lo][temp_hi][pres_lo][pres_hi][atm_lo][atm_hi]
+    """
+    valid = bool(data[1])
+    temp_raw = _signed_2byte((data[3] << 8) | data[2])
+    pres_raw = (data[5] << 8) | data[4]
+    atm_raw = (data[7] << 8) | data[6]
+    return ExtSensorData(
+        valid=valid,
+        temperature=temp_raw / 100.0,
+        pressure=float(pres_raw),
+        atm=atm_raw / 10000.0,
+    )
+
+
 def format_response_log(cmd: int, data: list | bytes) -> str:
     """Format a CAN response into a human-readable log string."""
     try:
@@ -488,6 +599,18 @@ def format_response_log(cmd: int, data: list | bytes) -> str:
                     f"/ motor_current_abs_max:{mc.motor_current_abs_max:.2f}A "
                     f"/ bat_current_max:{mc.bat_current_max:.2f}A "
                     f"/ drv8301_oc_mode:{mc.drv8301_oc_mode}")
+
+        elif cmd == RmdCommand.READ_ENCODER_STATUS:
+            h = parse_encoder_health(data)
+            return (f"airgap:{h.airgap_um:.0f}um sig:{h.signal_level} "
+                    f"spi_err:{h.spi_error_rate:.3f} crc:{'OK' if h.crc_ok else 'ERR'} "
+                    f"err:{int(h.error)} warn:{int(h.warning)}")
+
+        elif cmd == RmdCommand.READ_EXT_SENSOR:
+            s = parse_ext_sensor(data)
+            return (f"ext_sensor: valid={int(s.valid)} "
+                    f"temp={s.temperature:.2f}C pres={s.pressure:.0f}mbar "
+                    f"atm={s.atm:.4f}")
 
         elif cmd in STATUS_RETURN_COMMANDS:
             s = parse_status(data)

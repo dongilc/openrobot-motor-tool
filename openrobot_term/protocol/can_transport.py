@@ -16,8 +16,9 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from .can_commands import (
     CAN_HEADER_ID, RmdCommand, STATUS_RETURN_COMMANDS, FAULT_CODE,
-    parse_status, parse_status3, parse_multi_turn_angle, format_response_log,
-    build_read_motor_status_2,
+    parse_status, parse_status3, parse_multi_turn_angle, parse_encoder_health,
+    parse_encoder, parse_ext_sensor, parse_mit_params_response,
+    format_response_log, build_read_motor_status_2,
 )
 from .commands import build_get_fw_version
 
@@ -28,6 +29,8 @@ try:
         PCANBasic, TPCANMsg, TPCANTimestamp,
         PCAN_USBBUS1, PCAN_BAUD_1M, PCAN_ERROR_OK, PCAN_ERROR_QRCVEMPTY,
         PCAN_MESSAGE_STANDARD, PCAN_MESSAGE_EXTENDED,
+        PCAN_ERROR_BUSLIGHT, PCAN_ERROR_BUSHEAVY, PCAN_ERROR_BUSPASSIVE,
+        PCAN_ERROR_BUSOFF,
     )
     # Verify the DLL actually loads
     _test = PCANBasic()
@@ -59,6 +62,10 @@ class PcanTransport(QObject):
     cmd_status_received = pyqtSignal(int, object)        # (motor_id, RmdStatus) from 0xA1-A4 control
     status3_received = pyqtSignal(int, object)           # (motor_id, RmdStatus3) from 0x9D
     multiturn_received = pyqtSignal(float)               # degrees (0x92)
+    encoder_health_received = pyqtSignal(int, object)    # (motor_id, RmdEncoderHealth) from 0x9E
+    encoder_received = pyqtSignal(int, object)             # (motor_id, RmdEncoder) from 0x90
+    ext_sensor_received = pyqtSignal(int, object)          # (motor_id, ExtSensorData) from 0xD0
+    mit_params_received = pyqtSignal(int, object)          # (motor_id, dict) from 0xC4
     connected = pyqtSignal()
     disconnected = pyqtSignal()
     log_message = pyqtSignal(str)
@@ -88,9 +95,18 @@ class PcanTransport(QObject):
         self._rx_frames = 0
         self._counter_lock = threading.Lock()
 
+        # Cumulative counters (never reset — for CAN Bus Health tab)
+        self._total_tx = 0
+        self._total_rx = 0
+        self._total_send_errors = 0
+
         # Raw message buffer for display
         self._rxmsg = []
         self._rxmsg_max = 100
+
+        # Per-motor frame counters (never reset)
+        self._per_motor_rx: dict[int, int] = {}
+        self._per_motor_tx: dict[int, int] = {}
 
         # EID multi-frame RX reassembly buffer: {sender_id: bytearray}
         self._eid_rx_buf: dict[int, bytearray] = {}
@@ -98,6 +114,13 @@ class PcanTransport(QObject):
         # CAN scan state
         self._scan_mode: bool = False
         self._scan_found: set[int] = set()
+
+        # Send-error log rate limiting (1 log per second max)
+        self._send_err_log_time = 0.0
+        self._send_err_suppressed = 0
+
+        # Send cooldown: suppress all sends until this monotonic timestamp
+        self._send_cooldown_until = 0.0
 
     @property
     def available(self) -> bool:
@@ -137,6 +160,9 @@ class PcanTransport(QObject):
         self._rxmsg.clear()
         self._connected = True
 
+        # Brief cooldown to prevent immediate sends on reconnect
+        self._send_cooldown_until = time.monotonic() + 0.2
+
         # Start reader thread
         self._running = True
         self._reader_thread = threading.Thread(
@@ -164,9 +190,66 @@ class PcanTransport(QObject):
             self.log_message.emit("[PCAN] Disconnected")
             self.disconnected.emit()
 
+    def reset_bus(self) -> bool:
+        """Reset PCAN controller to recover from bus-off. Returns True on success.
+
+        Always performs full Uninitialize+Initialize cycle to ensure clean
+        recovery from bus-off state. Pauses sends for 500ms after reset
+        to let the CAN bus stabilize before transmitting.
+        """
+        if not PCAN_AVAILABLE or self._pc is None:
+            return False
+
+        self.log_message.emit("[PCAN] Resetting CAN bus (full cycle)...")
+
+        # 1. Stop all outgoing transmissions
+        self.stop_periodic()
+
+        # 2. Stop reader thread
+        self._running = False
+        if self._reader_thread and self._reader_thread.is_alive():
+            self._reader_thread.join(timeout=1.0)
+        self._reader_thread = None
+
+        # 3. Release PCAN handle
+        with self._lock:
+            self._pc.Uninitialize(PCAN_USBBUS1)
+
+        # 4. Wait for CAN transceiver to stabilize
+        time.sleep(0.3)
+
+        # 5. Re-initialize
+        with self._lock:
+            result = self._pc.Initialize(PCAN_USBBUS1, PCAN_BAUD_1M)
+
+        if result != PCAN_ERROR_OK:
+            self._connected = False
+            self.log_message.emit(f"[PCAN] Reconnect failed: 0x{result:02X}")
+            self.disconnected.emit()
+            return False
+
+        # 6. Flush stale RX messages
+        self._flush_rx_queue()
+
+        # 7. Set send cooldown (500ms) to let bus stabilize
+        self._send_cooldown_until = time.monotonic() + 0.5
+
+        # 8. Restart reader thread
+        self._connected = True
+        self._send_err_suppressed = 0
+        self._running = True
+        self._reader_thread = threading.Thread(
+            target=self._reader_loop, daemon=True, name="PCANReader")
+        self._reader_thread.start()
+
+        self.log_message.emit("[PCAN] Bus reset complete — sends paused 500ms")
+        return True
+
     def send_frame(self, data: bytes) -> bool:
         """Send a CAN frame to the current motor_id. Thread-safe."""
         if not self._connected:
+            return False
+        if time.monotonic() < self._send_cooldown_until:
             return False
 
         with self._lock:
@@ -181,15 +264,21 @@ class PcanTransport(QObject):
             result = self._pc.Write(PCAN_USBBUS1, msg)
 
         if result != PCAN_ERROR_OK:
-            self.log_message.emit(f"[PCAN] Send error: 0x{result:02X}")
+            self._log_send_error(result, "Send")
+            with self._counter_lock:
+                self._total_send_errors += 1
             return False
         with self._counter_lock:
             self._tx_frames += 1
+            self._total_tx += 1
+            self._per_motor_tx[self._motor_id] = self._per_motor_tx.get(self._motor_id, 0) + 1
         return True
 
     def send_frame_to(self, motor_id: int, data: bytes) -> bool:
         """Send a CAN frame to a specific motor_id without changing the global motor_id."""
         if not self._connected:
+            return False
+        if time.monotonic() < self._send_cooldown_until:
             return False
 
         with self._lock:
@@ -202,9 +291,13 @@ class PcanTransport(QObject):
             result = self._pc.Write(PCAN_USBBUS1, msg)
 
         if result != PCAN_ERROR_OK:
+            with self._counter_lock:
+                self._total_send_errors += 1
             return False
         with self._counter_lock:
             self._tx_frames += 1
+            self._total_tx += 1
+            self._per_motor_tx[motor_id] = self._per_motor_tx.get(motor_id, 0) + 1
         return True
 
     def start_scan(self, id_min: int = 1, id_max: int = 253):
@@ -277,6 +370,34 @@ class PcanTransport(QObject):
             self._rx_frames = 0
             self._tx_frames = 0
         return rx, tx
+
+    def get_cumulative_counts(self) -> tuple[int, int, int]:
+        """Return (total_rx, total_tx, total_send_errors) without resetting."""
+        with self._counter_lock:
+            return self._total_rx, self._total_tx, self._total_send_errors
+
+    def get_per_motor_counts(self) -> dict[int, tuple[int, int]]:
+        """Return {motor_id: (rx_count, tx_count)} without resetting."""
+        with self._counter_lock:
+            ids = set(self._per_motor_rx) | set(self._per_motor_tx)
+            return {mid: (self._per_motor_rx.get(mid, 0),
+                          self._per_motor_tx.get(mid, 0))
+                    for mid in sorted(ids)}
+
+    def clear_per_motor_counts(self):
+        """Reset per-motor RX/TX counters."""
+        with self._counter_lock:
+            self._per_motor_rx.clear()
+            self._per_motor_tx.clear()
+
+    def get_bus_status(self) -> int:
+        """Return PCAN bus status flags (0=OK, or BUSLIGHT/BUSHEAVY/BUSPASSIVE/BUSOFF)."""
+        if not PCAN_AVAILABLE or self._pc is None or not self._connected:
+            return 0
+        try:
+            return int(self._pc.GetStatus(PCAN_USBBUS1))
+        except Exception:
+            return 0
 
     # ── VESC EID (Extended ID) multi-frame protocol ──
 
@@ -354,6 +475,8 @@ class PcanTransport(QObject):
         """Send a single CAN Extended ID frame. Thread-safe."""
         if not self._connected:
             return False
+        if time.monotonic() < self._send_cooldown_until:
+            return False
 
         with self._lock:
             msg = TPCANMsg()
@@ -365,11 +488,38 @@ class PcanTransport(QObject):
             result = self._pc.Write(PCAN_USBBUS1, msg)
 
         if result != PCAN_ERROR_OK:
-            self.log_message.emit(f"[PCAN] EID send error: 0x{result:02X}")
+            self._log_send_error(result, "EID send")
+            with self._counter_lock:
+                self._total_send_errors += 1
             return False
+        target_id = eid & 0xFF
         with self._counter_lock:
             self._tx_frames += 1
+            self._total_tx += 1
+            if target_id > 0:
+                self._per_motor_tx[target_id] = self._per_motor_tx.get(target_id, 0) + 1
         return True
+
+    def _flush_rx_queue(self):
+        """Drain all pending RX messages after reset."""
+        for _ in range(1000):
+            result = self._pc.Read(PCAN_USBBUS1)
+            if result[0] != PCAN_ERROR_OK:
+                break
+
+    def _log_send_error(self, result: int, prefix: str = "Send"):
+        """Rate-limited send error log — max 1 message per second."""
+        now = time.time()
+        if now - self._send_err_log_time >= 1.0:
+            extra = ""
+            if self._send_err_suppressed > 0:
+                extra = f" (+{self._send_err_suppressed} suppressed)"
+            self.log_message.emit(
+                f"[PCAN] {prefix} error: 0x{result:02X}{extra}")
+            self._send_err_log_time = now
+            self._send_err_suppressed = 0
+        else:
+            self._send_err_suppressed += 1
 
     # ── Internal threads ──
 
@@ -400,8 +550,19 @@ class PcanTransport(QObject):
 
     def _process_message(self, msg, ts):
         """Process a received CAN message (SID or EID)."""
+        # Extract motor/sender ID for per-motor counting
+        if msg.MSGTYPE & 0x02:
+            # EID: sender_id = lower 8 bits
+            _pm_id = msg.ID & 0xFF
+        else:
+            # SID: motor_id = SID - CAN_HEADER_ID
+            _pm_id = msg.ID - CAN_HEADER_ID if msg.ID >= CAN_HEADER_ID else 0
+
         with self._counter_lock:
             self._rx_frames += 1
+            self._total_rx += 1
+            if _pm_id > 0:
+                self._per_motor_rx[_pm_id] = self._per_motor_rx.get(_pm_id, 0) + 1
 
         # Compute timestamp in seconds
         timestamp = (ts.micros + 1000 * ts.millis +
@@ -478,6 +639,30 @@ class PcanTransport(QObject):
                     pass
                 log_text = format_response_log(cmd, data_list)
                 self.log_message.emit(f"[CAN RX] {log_text}")
+            elif cmd == RmdCommand.READ_ENCODER:
+                try:
+                    enc = parse_encoder(data_list)
+                    self.encoder_received.emit(motor_id, enc)
+                except Exception:
+                    pass
+            elif cmd == RmdCommand.READ_ENCODER_STATUS:
+                try:
+                    health = parse_encoder_health(data_list)
+                    self.encoder_health_received.emit(motor_id, health)
+                except Exception:
+                    pass
+            elif cmd == RmdCommand.READ_EXT_SENSOR:
+                try:
+                    sensor = parse_ext_sensor(data_list)
+                    self.ext_sensor_received.emit(motor_id, sensor)
+                except Exception:
+                    pass
+            elif cmd == RmdCommand.READ_MIT_PARAMS:
+                try:
+                    params = parse_mit_params_response(data_list)
+                    self.mit_params_received.emit(motor_id, params)
+                except Exception:
+                    pass
             else:
                 # Log non-status responses (encoder, PID, fault, etc.)
                 log_text = format_response_log(cmd, data_list)
@@ -555,12 +740,22 @@ class PcanTransport(QObject):
     def _periodic_loop(self):
         """Periodically resend the last CAN message."""
         while self._periodic_running and self._connected:
+            if time.monotonic() < self._send_cooldown_until:
+                time.sleep(1.0 / self._periodic_freq)
+                continue
             if self._last_msg is not None:
                 with self._lock:
-                    result = self._pc.Write(PCAN_USBBUS1, self._last_msg)
+                    last_msg = self._last_msg
+                    result = self._pc.Write(PCAN_USBBUS1, last_msg)
                 if result != PCAN_ERROR_OK:
-                    self.log_message.emit(f"[PCAN] Periodic send error: 0x{result:02X}")
+                    self._log_send_error(result, "Periodic send")
+                    with self._counter_lock:
+                        self._total_send_errors += 1
                 else:
+                    mid = last_msg.ID - CAN_HEADER_ID if last_msg.ID >= CAN_HEADER_ID else 0
                     with self._counter_lock:
                         self._tx_frames += 1
+                        self._total_tx += 1
+                        if mid > 0:
+                            self._per_motor_tx[mid] = self._per_motor_tx.get(mid, 0) + 1
             time.sleep(1.0 / self._periodic_freq)

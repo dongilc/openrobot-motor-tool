@@ -77,6 +77,18 @@ class ConnectionBar(QWidget):
 
         can_row.addStretch()
 
+        # RESET CAN button (recovers from bus-off)
+        self.can_reset_btn = QPushButton("RESET CAN")
+        self.can_reset_btn.setMinimumHeight(28)
+        self.can_reset_btn.setStyleSheet(
+            "QPushButton { background-color: #8B0000; color: white; "
+            "font-weight: bold; font-size: 12px; padding: 2px 14px; }"
+            "QPushButton:hover { background-color: #A52A2A; }"
+        )
+        self.can_reset_btn.setToolTip("Reset PCAN bus (recover from bus-off)")
+        self.can_reset_btn.clicked.connect(self._on_can_reset)
+        can_row.addWidget(self.can_reset_btn)
+
         # REBOOT button (sends COMM_REBOOT via CAN EID)
         self.reboot_btn = QPushButton("REBOOT")
         self.reboot_btn.setMinimumHeight(28)
@@ -206,6 +218,17 @@ class ConnectionBar(QWidget):
         # Disable reboot during re-scan (old ID is stale, command would be ignored)
         self.reboot_btn.setEnabled(False)
         QTimer.singleShot(500, self._on_can_scan)
+
+    def _on_can_reset(self):
+        if not self._can_transport:
+            return
+        ok = self._can_transport.reset_bus()
+        if ok:
+            self.can_status_label.setText("CAN Reset OK")
+            self.can_status_label.setStyleSheet("color: #7FC87F; font-size: 9pt;")
+        else:
+            self.can_status_label.setText("CAN Reset FAILED")
+            self.can_status_label.setStyleSheet("color: #C83434; font-size: 9pt;")
 
     def _on_reboot(self):
         if not self._can_transport or not self._can_transport.is_connected():
