@@ -478,13 +478,13 @@
   <tr><td>Read Fault Code</td><td>0xB0</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Read Max Current</td><td>0xB1</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Write Max Current to ROM</td><td>0xB2</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
-  <tr><td><strong>MIT Control</strong></td><td>0xC0</td><td colspan="2">p_des (16bit)</td><td>v_hi (8bit)</td><td>v_lo4|kp_hi4</td><td>kp_lo (8bit)</td><td>Kd (8bit)</td></tr>
-  <tr><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr><td><strong>Read MIT Params</strong></td><td>0xC4</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr><td><strong>Write MIT Params to ROM</strong></td><td>0xC5</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_input (uint16)</td><td colspan="2">GR (uint16)</td></tr>
-  <tr><td><strong>Read External Sensor</strong></td><td>0xD0</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>MIT Control</strong></td><td>0xC0</td><td colspan="2">p_des (16bit)</td><td>v_hi (8bit)</td><td>v_lo4|kp_hi4</td><td>kp_lo (8bit)</td><td>Kd (8bit)</td><td>&tau;_ff (8bit)</td></tr>
+  <tr><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>Read MIT Params</strong></td><td>0xC4</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>Write MIT Params to ROM</strong></td><td>0xC5</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_input (uint16)</td><td colspan="2">GR (uint16)</td><td>NULL</td></tr>
+  <tr><td><strong>Read External Sensor</strong></td><td>0xD0</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
 </table>
 
 <h2>RX CAN Protocols Summary</h2>
@@ -513,10 +513,10 @@
   <tr><td>Read Max Current</td><td>0xB1</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
   <tr><td>Write Max Current to ROM</td><td>0xB2</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
   <tr><td><strong>MIT Control</strong></td><td>0xC0</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
-  <tr><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
-  <tr><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
-  <tr><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
-  <tr><td><strong>Read MIT Params / Write MIT Params</strong></td><td>0xC4</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_out (uint16)</td><td colspan="2">GR (uint16)</td></tr>
+  <tr><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
+  <tr><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
+  <tr><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
+  <tr><td><strong>Read MIT Params / Write MIT Params</strong></td><td>0xC4</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_out (uint16)</td><td colspan="2">GR (uint16)</td><td>0x00</td></tr>
   <tr><td><strong>Read External Sensor</strong></td><td>0xD0</td><td>valid</td><td colspan="2">Temperature</td><td colspan="2">Pressure</td><td colspan="2">Atmosphere</td></tr>
 </table>
 
