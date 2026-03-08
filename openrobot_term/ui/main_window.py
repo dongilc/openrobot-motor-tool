@@ -120,7 +120,7 @@ class MainWindow(QMainWindow):
 
         # RS485 serial terminal dock (bottom-right, side-by-side with Terminal)
         self.serial_terminal_tab = SerialTerminalTab()
-        self.rs485_dock = QDockWidget("RS485 Terminal", self)
+        self.rs485_dock = QDockWidget("RS485 Debug Print", self)
         self.rs485_dock.setWidget(self.serial_terminal_tab)
         self.rs485_dock.setFeatures(
             QDockWidget.DockWidgetFeature.DockWidgetMovable
