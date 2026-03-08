@@ -3,6 +3,8 @@ Main window with tab-based layout, docked motor control panel, and VESC packet d
 CAN-only: all VESC communication via PCAN-USB EID multi-frame protocol.
 """
 
+import sys
+
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QTabWidget, QDockWidget,
     QTextEdit, QSplitter, QLabel, QHBoxLayout, QPushButton,
@@ -14,6 +16,7 @@ from ..protocol.commands import CommPacketId, VescValues, McconfPid
 from ..protocol.can_transport import PcanTransport
 from .connection_bar import ConnectionBar
 from .terminal_tab import TerminalTab
+from .serial_terminal_tab import SerialTerminalTab
 from .firmware_tab import FirmwareTab
 from .realtime_tab import RealtimeTab
 from .waveform_tab import WaveformTab
@@ -26,12 +29,13 @@ from .can_position_tuning_tab import CanPositionTuningTab
 from .ms5803_tab import Ms5803Tab
 from .rls_health_tab import RlsHealthTab
 from .can_bus_health_tab import CanBusHealthTab
+from .ecat_tab import EcatTab
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("OpenRobot Motor Tool V2.3 (PCAN Only)")
+        self.setWindowTitle("OpenRobot Motor Tool V3.0 (PCAN + EtherCAT)")
 
         self.can_transport = PcanTransport()
 
@@ -85,6 +89,9 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.can_bus_health_tab, "CAN Bus Health")
         self.tabs.addTab(self.firmware_tab, "Firmware")
 
+        self.ecat_tab = EcatTab()
+        self.tabs.addTab(self.ecat_tab, "EtherCAT")
+
         # Right dock spans full height (top-right & bottom-right corners belong to right)
         self.setCorner(Qt.Corner.TopRightCorner, Qt.DockWidgetArea.RightDockWidgetArea)
         self.setCorner(Qt.Corner.BottomRightCorner, Qt.DockWidgetArea.RightDockWidgetArea)
@@ -92,7 +99,7 @@ class MainWindow(QMainWindow):
 
         # Unified Motor Control dock (RMD + VESC EID combined)
         self.can_control_tab = CanControlTab(self.can_transport)
-        self.motor_dock = QDockWidget("Motor Control", self)
+        self.motor_dock = QDockWidget("Motor Control (PCAN)", self)
         self.motor_dock.setWidget(self.can_control_tab)
         self.motor_dock.setFeatures(
             QDockWidget.DockWidgetFeature.DockWidgetMovable
@@ -101,15 +108,27 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.motor_dock)
         self.motor_dock.setMinimumWidth(320)
 
-        # Terminal dock (bottom-left, below tabs)
+        # Terminal dock (bottom-left)
         self.terminal_tab = TerminalTab(self.can_transport)
-        self.terminal_dock = QDockWidget("Terminal", self)
+        self.terminal_dock = QDockWidget("CAN Terminal", self)
         self.terminal_dock.setWidget(self.terminal_tab)
         self.terminal_dock.setFeatures(
             QDockWidget.DockWidgetFeature.DockWidgetMovable
             | QDockWidget.DockWidgetFeature.DockWidgetFloatable
         )
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.terminal_dock)
+
+        # RS485 serial terminal dock (bottom-right, side-by-side with Terminal)
+        self.serial_terminal_tab = SerialTerminalTab()
+        self.rs485_dock = QDockWidget("RS485 Terminal", self)
+        self.rs485_dock.setWidget(self.serial_terminal_tab)
+        self.rs485_dock.setFeatures(
+            QDockWidget.DockWidgetFeature.DockWidgetMovable
+            | QDockWidget.DockWidgetFeature.DockWidgetFloatable
+        )
+        self.splitDockWidget(self.terminal_dock, self.rs485_dock, Qt.Orientation.Horizontal)
+
+        self.resizeDocks([self.terminal_dock, self.rs485_dock], [600, 400], Qt.Orientation.Horizontal)
         self.resizeDocks([self.terminal_dock], [250], Qt.Orientation.Vertical)
         self.resizeDocks([self.motor_dock], [340], Qt.Orientation.Horizontal)
 
@@ -145,6 +164,10 @@ class MainWindow(QMainWindow):
 
         # CAN frame → AI Analysis tab (for PID read responses)
         self.can_transport.frame_received.connect(self.analysis_tab.on_frame_received)
+
+        # Auto-switch to EtherCAT tab if launched with --ecat-adapter (admin restart)
+        if any(a.startswith("--ecat-adapter=") for a in sys.argv):
+            self.tabs.setCurrentWidget(self.ecat_tab)
 
         # Keyboard shortcut: Ctrl+Shift+I to toggle debug panel
         self._debug_shortcut = QShortcut(QKeySequence("Ctrl+Shift+I"), self)
@@ -355,5 +378,7 @@ class MainWindow(QMainWindow):
         self.ms5803_tab.cleanup()
         self.rls_health_tab.cleanup()
         self.can_bus_health_tab.cleanup()
+        self.serial_terminal_tab.cleanup()
+        self.ecat_tab.cleanup()
         self.can_transport.disconnect()
         event.accept()
