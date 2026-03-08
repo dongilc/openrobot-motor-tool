@@ -35,7 +35,7 @@ from .ecat_tab import EcatTab
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("OpenRobot Motor Tool V3.0 (PCAN + EtherCAT)")
+        self.setWindowTitle("OpenRobot Motor Tool V3.0 (PCAN + EtherCAT + RS485)")
 
         self.can_transport = PcanTransport()
 
