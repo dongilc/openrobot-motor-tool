@@ -2,7 +2,7 @@
 
 > English | **[한국어](README_ko.md)**
 
-GUI tool for OpenRobot motor controllers. **CAN-Only architecture** — communicates exclusively via PCAN-USB.
+GUI tool for OpenRobot motor controllers. **CAN-Only architecture** — communicates via PCAN-USB or CANable 2.0 (slcan).
 
 **[CAN Protocol Documentation](https://dongilc.github.io/openrobot-motor-tool/)** — OpenRobot MC CAN communication protocol specification (SID/EID)
 
@@ -10,13 +10,13 @@ GUI tool for OpenRobot motor controllers. **CAN-Only architecture** — communic
 
 Download the latest version from **[Releases](https://github.com/dongilc/openrobot-motor-tool/releases/latest)**:
 
-- **Windows**: `OpenRobot_Motor_Tool_v3.4.exe`
+- **Windows**: `OpenRobot_Motor_Tool_v3.5.exe`
 
 No installation required — single executable.
 
 ## Features
 
-### CAN Control & Monitoring (PCAN-USB)
+### CAN Control & Monitoring (PCAN-USB or CANable 2.0/slcan)
 - **CAN Control** — Motor control (position/speed/torque), Motor Off/Stop/Start
 - **CAN Data** — Real-time monitoring (current, speed, position, temperature), data logging
 - **Parameter** — MCCONF/APPCONF parameter read/write (VESC EID)
@@ -39,7 +39,7 @@ No installation required — single executable.
 ## System Requirements
 
 - **OS**: Windows 10/11 (64-bit)
-- **PCAN driver** installed (PCAN-USB compatible)
+- **CAN driver** — PCAN driver (PCAN-USB) **or** CANable 2.0 with slcan firmware (no extra driver needed on Win10/11)
 
 ### Hardware
 - **OpenRobot Motor Controller** (SPN-MC1 V1R2)
@@ -47,16 +47,19 @@ No installation required — single executable.
   - [PCAN-USB](https://www.peak-system.com/PCAN-USB.199.0.html) (PEAK-System)
   - [PCAN-USB FD](https://www.peak-system.com/PCAN-USB-FD.365.0.html) (PEAK-System, CAN FD support)
   - [Pibiger USB to CAN](https://www.pibiger-tech.com/) (PCAN-compatible)
+  - **[CANable 2.0](https://canable.io/) (slcan firmware)** — low-cost USB CAN ($25 class, new in v3.5)
 
-> **Note**: This tool uses a CAN-Only architecture and cannot operate without a USB-to-CAN adapter. The PCAN driver must be installed separately.
+> **Note**: This tool uses a CAN-Only architecture and cannot operate without a USB-to-CAN adapter. For PCAN-family adapters, install the PEAK PCAN driver. For CANable 2.0, flash slcan firmware (no extra driver required on Windows 10/11).
 
 ## Quick Start
 
-1. Download `OpenRobot_Motor_Tool_v3.4.exe` from [Releases](https://github.com/dongilc/openrobot-motor-tool/releases/latest)
-2. Install PCAN driver from PEAK-System
-3. Connect PCAN-USB adapter to PC
+1. Download `OpenRobot_Motor_Tool_v3.5.exe` from [Releases](https://github.com/dongilc/openrobot-motor-tool/releases/latest)
+2. Install the driver for your adapter:
+   - **PCAN-USB**: install PCAN driver from PEAK-System
+   - **CANable 2.0**: flash slcan firmware (no driver install needed on Win10/11)
+3. Connect the USB-to-CAN adapter to PC
 4. Run the executable
-5. Click **Open** to start automatic CAN bus scan
+5. Select the backend (**PCAN-USB** or **CANable 2.0 (slcan)**) and click **Open** to start automatic CAN bus scan
 6. MCCONF/APPCONF are automatically read after scan
 
 ## Target Hardware
