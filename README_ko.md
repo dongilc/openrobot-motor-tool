@@ -42,7 +42,9 @@ OpenRobot 모터 컨트롤러용 GUI 도구입니다. **CAN-Only 아키텍처** 
 - **CAN 드라이버** — PCAN 드라이버 (PCAN-USB) **또는** slcan 펌웨어가 적재된 CANable 2.0 (Win10/11 에서 별도 드라이버 불필요)
 
 ### 하드웨어
-- **OpenRobot Motor Controller** (SPN-MC1 V1R2)
+- **OpenRobot Motor Controller** — 다음 중 하나:
+  - **SPN-MC1 V1R2** (60V class)
+  - **SPN-MC V2** (100V class, DRV8350 + INA241A3)
 - **USB-to-CAN 어댑터** (필수) — 다음 중 하나:
   - [PCAN-USB](https://www.peak-system.com/PCAN-USB.199.0.html) (PEAK-System)
   - [PCAN-USB FD](https://www.peak-system.com/PCAN-USB-FD.365.0.html) (PEAK-System, CAN FD 지원)
@@ -65,7 +67,7 @@ OpenRobot 모터 컨트롤러용 GUI 도구입니다. **CAN-Only 아키텍처** 
 ## 대상 하드웨어
 
 - **MCU**: STM32F405 (ARM Cortex-M4, 168MHz)
-- **Motor Controller**: OpenRobot MC 시리즈 (SPN-MC1 V1R2)
+- **Motor Controller**: OpenRobot MC 시리즈 (SPN-MC1 V1R2, SPN-MC V2)
 - **Encoder**: AS5047 (14-bit), MT6835 (21-bit) 지원
 - **CAN**: [OpenRobot Motor CAN Protocol v12](https://dongilc.github.io/openrobot-motor-tool/) (SID + VESC EID)
 

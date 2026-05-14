@@ -42,7 +42,9 @@ No installation required — single executable.
 - **CAN driver** — PCAN driver (PCAN-USB) **or** CANable 2.0 with slcan firmware (no extra driver needed on Win10/11)
 
 ### Hardware
-- **OpenRobot Motor Controller** (SPN-MC1 V1R2)
+- **OpenRobot Motor Controller** — one of the following:
+  - **SPN-MC1 V1R2** (60V class)
+  - **SPN-MC V2** (100V class, DRV8350 + INA241A3)
 - **USB-to-CAN Adapter** (required) — one of the following:
   - [PCAN-USB](https://www.peak-system.com/PCAN-USB.199.0.html) (PEAK-System)
   - [PCAN-USB FD](https://www.peak-system.com/PCAN-USB-FD.365.0.html) (PEAK-System, CAN FD support)
@@ -65,7 +67,7 @@ No installation required — single executable.
 ## Target Hardware
 
 - **MCU**: STM32F405 (ARM Cortex-M4, 168MHz)
-- **Motor Controller**: OpenRobot MC series (SPN-MC1 V1R2)
+- **Motor Controller**: OpenRobot MC series (SPN-MC1 V1R2, SPN-MC V2)
 - **Encoder**: AS5047 (14-bit), MT6835 (21-bit) supported
 - **CAN**: [OpenRobot Motor CAN Protocol v12](https://dongilc.github.io/openrobot-motor-tool/) (SID + VESC EID)
 
