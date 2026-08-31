@@ -481,16 +481,17 @@ function switchTab(tabId) {
 
 <div class="changelog">
   <h4>26-08-31 (v15)</h4>
-  <ul>
-    <li><strong>0x93 Read Output Encoder 신설</strong> &mdash; 감속기 <strong>출력축</strong>에 달린 MA600 엔코더를 읽는다.
-      기존 <code>0x90</code>·<code>0x92</code> 는 <strong>둘 다 모터측 엔코더</strong>를 반환하므로, 출력단 위치를 CAN 으로
-      읽을 방법이 없었다. SPN-MC V2 양산형은 출력 엔코더가 기본 사양이라 이 구멍을 메웠다.</li>
-    <li><strong>LUT 보정 여부를 플래그로 보고</strong> &mdash; single-turn 값은 <code>or_outcal</code> LUT 가 적재되어 있으면
-      보정값, 없으면 raw 이다. <code>DATA[7]</code> 의 b1/b2 로 호스트가 구분할 수 있다.</li>
-    <li><strong>보드 종속</strong> &mdash; 펌웨어가 <code>USE_MA600_OUTPUT_ENCODER</code> 로 빌드된 보드만 응답한다.
-      그 외 보드는 이 명령을 무시한다.</li>
-    <li><strong>양산 캐리브레이션</strong> &mdash; 출력 LUT 는 <code>or_outcal</code> 로 생성해 EEPROM 에 저장되며,
-      펌웨어 업데이트로 지워지지 않는다 (EEPROM 에뮬레이션 = 섹터 1·2, 앱은 섹터 3 부터).</li>
+    <ul>
+    <li><strong>0x93 Read Output Encoder 추가</strong> &mdash; 감속기 출력축 MA600 엔코더 읽기.
+      <code>DATA[1:2]</code> single-turn (uint16, 360/65536 deg/LSB), <code>DATA[3:6]</code> multi-turn
+      (int32, 0.01 deg/LSB), <code>DATA[7]</code> status. 기존 <code>0x90</code>·<code>0x92</code> 는
+      모터측 엔코더 값이므로 기어비만큼 다른 값이다.</li>
+    <li><strong>Status 비트</strong> &mdash; <code>DATA[7]</code> b0 sensor valid, b1 forward LUT 적용,
+      b2 reverse LUT 적용. single-turn 은 <code>or_outcal</code> LUT 적재 시 보정값, 미적재 시 raw.</li>
+    <li><strong>보드 종속</strong> &mdash; <code>USE_MA600_OUTPUT_ENCODER</code> 로 빌드된 보드만 응답.
+      미지원 보드는 무응답이므로 호스트 타임아웃 필요.</li>
+    <li><strong>출력 LUT 영속성</strong> &mdash; <code>or_outcal</code> 로 생성해 EEPROM 저장.
+      EEPROM 에뮬레이션은 Sector 1·2, 앱은 Sector 3 부터이므로 펌웨어 업데이트로 초기화되지 않는다.</li>
   </ul>
 </div>
 
@@ -767,8 +768,7 @@ function switchTab(tabId) {
 <!-- 0x93 NEW v15 -->
 <hr>
 <h3><span class="cmd-id">0x93</span> Read Output Encoder <span style="color:#4CAF50;">NEW v15</span></h3>
-<p class="cmd-desc">감속기 <strong>출력축</strong>에 달린 MA600 엔코더를 읽는다.
-<code>0x90</code>·<code>0x92</code> 는 모터측 엔코더를 반환한다 &mdash; 둘은 기어비만큼 다른 값이다.</p>
+<p class="cmd-desc">감속기 출력축 MA600 엔코더 읽기. <code>0x90</code>·<code>0x92</code> 는 모터측 엔코더 값이므로 기어비만큼 다르다.</p>
 
 <div class="tx-frame"><span class="tx-label">TX:</span> [0x93, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
 
@@ -786,23 +786,21 @@ function switchTab(tabId) {
 
 <div class="note-box">
   <div class="note-title">부연설명</div>
-  <p><strong>어느 엔코더인가.</strong> SPN-MC V2 양산형은 모터측(정류용)과 출력축 MA600 두 개를 갖는다.
-  <code>0x90</code>/<code>0x92</code> 는 전자 를, <code>0x93</code> 은 후자 를 보고한다.
-  감속비가 8:1 이면 모터 8회전이 출력 1회전이므로 두 값은 근본적으로 다르다.</p>
+  <p>SPN-MC V2 는 모터측(정류용)과 출력축 MA600 두 개의 엔코더를 갖는다.
+  <code>0x90</code>·<code>0x92</code> 는 전자, <code>0x93</code> 은 후자를 반환한다.
+  기어비 8:1 이면 모터 8회전이 출력 1회전이므로 두 값은 서로 다르다.</p>
 
-  <p><strong>Status 비트를 반드시 확인할 것.</strong>
-  <code>b0</code>가 0 이면 센서 읽기가 실패한 것이라 각도값을 쓰면 안 된다.
-  <code>b1</code>이 1 이면 single-turn 이 <code>or_outcal</code> LUT 로 보정된 값이고,
-  0 이면 <strong>미보정 raw</strong> 이다 &mdash; 캐리브레이션 전 보드는 오차가 30&deg; 에 이를 수 있다.
-  <code>b2</code>는 역방향 플랭크 LUT 까지 있는지(백래쉬 보정) 를 뜻한다.</p>
+  <p><code>DATA[7]</code> 의 <code>b0</code> 가 0 이면 센서 읽기 실패이므로 각도값은 유효하지 않다.
+  <code>b1</code> 이 1 이면 single-turn 은 <code>or_outcal</code> LUT 로 보정된 값이고, 0 이면 미보정 raw 이다.
+  캐리브레이션 전 보드의 raw 값은 오차가 30&deg; 수준에 이른다.
+  <code>b2</code> 는 역방향 플랭크 LUT(백래쉬 보정) 적재 여부를 나타낸다.</p>
 
-  <p><strong>보드 종속.</strong> 펌웨어가 <code>USE_MA600_OUTPUT_ENCODER</code> 로 빌드된 보드만 응답한다.
-  출력 엔코더가 없는 보드는 이 명령에 아무 응답도 하지 않으므로, 호스트는 타임아웃을 두어야 한다.</p>
+  <p><code>USE_MA600_OUTPUT_ENCODER</code> 로 빌드된 보드만 응답한다.
+  출력 엔코더가 없는 보드는 이 명령에 응답하지 않는다.</p>
 
-  <p><strong>캐리브레이션.</strong> 출력 LUT 는 터미널 명령 <code>or_outcal</code> 로 생성해 EEPROM 에 저장된다.
-  기구 편심·자석 장착 오차를 보정하는 것이라 <strong>유닛마다 해야 하고 개체 간 이식이 안 된다.</strong>
-  EEPROM 에뮬레이션은 섹터 1·2 이고 앱은 섹터 3 부터라,
-  <strong>펌웨어 업데이트로는 캐리브레이션이 지워지지 않는다.</strong></p>
+  <p>출력 LUT 는 터미널 명령 <code>or_outcal</code> 로 생성해 EEPROM 에 저장된다.
+  기구 편심·자석 장착 오차 보정이므로 개체마다 수행해야 하며 다른 개체로 이식할 수 없다.
+  EEPROM 에뮬레이션은 Sector 1·2, 앱은 Sector 3 부터이므로 펌웨어 업데이트로는 초기화되지 않는다.</p>
 </div>
 
 <!-- 0x9C NEW -->
@@ -2069,7 +2067,7 @@ Without protection, a large position step causes the PID to output maximum curre
   <tr>
     <td><strong>v15</strong></td>
     <td>2026-08-31</td>
-    <td><strong>0x93 Read Output Encoder added</strong> &mdash; reads the MA600 on the geared output shaft. 0x90 / 0x92 both report the motor-side encoder, so the output had no CAN path. Returns single-turn (uint16), multi-turn (int32, 0.01 deg) and a status byte reporting sensor validity and whether an <code>or_outcal</code> LUT is applied. Answered only on boards built with <code>USE_MA600_OUTPUT_ENCODER</code>.</td>
+    <td>0x93 Read Output Encoder added &mdash; geared output shaft MA600. single-turn (uint16, 360/65536 deg/LSB), multi-turn (int32, 0.01 deg/LSB), status byte (sensor valid / forward LUT / reverse LUT). 0x90 and 0x92 report the motor-side encoder. Answered only on boards built with USE_MA600_OUTPUT_ENCODER. Output LUT is generated by or_outcal and stored in EEPROM.</td>
   </tr>
 </table>
 
