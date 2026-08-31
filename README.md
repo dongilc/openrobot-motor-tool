@@ -69,7 +69,7 @@ No installation required — single executable.
 - **MCU**: STM32F405 (ARM Cortex-M4, 168MHz)
 - **Motor Controller**: OpenRobot MC series (SPN-MC1 V1R2, SPN-MC V2)
 - **Encoder**: AS5047 (14-bit), MT6835 (21-bit) supported
-- **CAN**: [OpenRobot Motor CAN Protocol v14](https://dongilc.github.io/openrobot-motor-tool/) (SID + VESC EID)
+- **CAN**: [OpenRobot Motor CAN Protocol v15](https://dongilc.github.io/openrobot-motor-tool/) (SID + VESC EID)
 
 ## Documentation
 

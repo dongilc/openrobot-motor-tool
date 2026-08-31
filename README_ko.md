@@ -69,7 +69,7 @@ OpenRobot 모터 컨트롤러용 GUI 도구입니다. **CAN-Only 아키텍처** 
 - **MCU**: STM32F405 (ARM Cortex-M4, 168MHz)
 - **Motor Controller**: OpenRobot MC 시리즈 (SPN-MC1 V1R2, SPN-MC V2)
 - **Encoder**: AS5047 (14-bit), MT6835 (21-bit) 지원
-- **CAN**: [OpenRobot Motor CAN Protocol v14](https://dongilc.github.io/openrobot-motor-tool/) (SID + VESC EID)
+- **CAN**: [OpenRobot Motor CAN Protocol v15](https://dongilc.github.io/openrobot-motor-tool/) (SID + VESC EID)
 
 ## 문서
 

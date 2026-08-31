@@ -367,7 +367,7 @@ function switchTab(tabId) {
     &nbsp;&nbsp;<a href="https://github.com/dongilc/openrobot-motor-tool" target="_blank" style="font-size:13px; color:var(--primary-light);">GitHub Repository</a>
   </div>
   <div class="version-info">
-    <strong>Version 14</strong> &mdash; 2026-03-26 &nbsp;|&nbsp; by Dongil Choi
+    <strong>Version 15</strong> &mdash; 2026-08-31 &nbsp;|&nbsp; by Dongil Choi
   </div>
 </div>
 
@@ -479,6 +479,21 @@ function switchTab(tabId) {
   </ul>
 </div>
 
+<div class="changelog">
+  <h4>26-08-31 (v15)</h4>
+  <ul>
+    <li><strong>0x93 Read Output Encoder 신설</strong> &mdash; 감속기 <strong>출력축</strong>에 달린 MA600 엔코더를 읽는다.
+      기존 <code>0x90</code>·<code>0x92</code> 는 <strong>둘 다 모터측 엔코더</strong>를 반환하므로, 출력단 위치를 CAN 으로
+      읽을 방법이 없었다. SPN-MC V2 양산형은 출력 엔코더가 기본 사양이라 이 구멍을 메웠다.</li>
+    <li><strong>LUT 보정 여부를 플래그로 보고</strong> &mdash; single-turn 값은 <code>or_outcal</code> LUT 가 적재되어 있으면
+      보정값, 없으면 raw 이다. <code>DATA[7]</code> 의 b1/b2 로 호스트가 구분할 수 있다.</li>
+    <li><strong>보드 종속</strong> &mdash; 펌웨어가 <code>USE_MA600_OUTPUT_ENCODER</code> 로 빌드된 보드만 응답한다.
+      그 외 보드는 이 명령을 무시한다.</li>
+    <li><strong>양산 캐리브레이션</strong> &mdash; 출력 LUT 는 <code>or_outcal</code> 로 생성해 EEPROM 에 저장되며,
+      펌웨어 업데이트로 지워지지 않는다 (EEPROM 에뮬레이션 = 섹터 1·2, 앱은 섹터 3 부터).</li>
+  </ul>
+</div>
+
 <!-- ============================================================ -->
 <!-- GENERAL -->
 <!-- ============================================================ -->
@@ -531,6 +546,7 @@ function switchTab(tabId) {
   <tr><td>Write encoder offset</td><td>0x91</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="2">Encoder offset</td></tr>
   <tr><td>Write current pos as zero</td><td>0x19</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Read multi turns angle</td><td>0x92</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>Read output encoder</strong></td><td>0x93</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td><strong>Read Motor Status 2</strong></td><td>0x9C</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td><strong>Read Motor Status 3</strong></td><td>0x9D</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Motor off</td><td>0x80</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
@@ -567,6 +583,7 @@ function switchTab(tabId) {
   <tr><td>Write encoder offset</td><td>0x91</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td colspan="2">Encoder offset</td></tr>
   <tr><td>Write current pos as zero</td><td>0x19</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td colspan="2">Encoder offset</td></tr>
   <tr><td>Read multi turns angle</td><td>0x92</td><td colspan="7">Multi-turn Angle (7 bytes LE)</td></tr>
+  <tr><td><strong>Read output encoder</strong></td><td>0x93</td><td colspan="2">Output single-turn</td><td colspan="4">Output multi-turn</td><td>Status</td></tr>
   <tr><td><strong>Read Motor Status 2</strong></td><td>0x9C</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
   <tr><td><strong>Read Motor Status 3</strong></td><td>0x9D</td><td>Control Mode</td><td colspan="2">Phase A Curr</td><td colspan="2">Phase B Curr</td><td colspan="2">Phase C Curr</td></tr>
   <tr><td>Motor off</td><td>0x80</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
@@ -608,6 +625,7 @@ function switchTab(tabId) {
   <tr><td><code>0x91</code></td><td>Write Encoder Offset</td><td class="type-write">Write</td><td>No (echo)</td></tr>
   <tr><td><code>0x19</code></td><td>Write Current Pos as Zero</td><td class="type-write">Write</td><td>No (offset)</td></tr>
   <tr><td><code>0x92</code></td><td>Read Multi-Turn Angle</td><td class="type-read">Read</td><td>No (angle only)</td></tr>
+  <tr><td><code>0x93</code></td><td><strong>Read Output Encoder</strong></td><td class="type-read">Read</td><td>No (output shaft only)</td></tr>
   <tr><td><code>0x9C</code></td><td>Read Motor Status 2</td><td class="type-read">Read</td><td><strong>Yes</strong></td></tr>
   <tr><td><code>0x9D</code></td><td>Read Motor Status 3</td><td class="type-read">Read</td><td><strong>Yes (phase currents)</strong></td></tr>
   <tr><td><code>0x80</code></td><td>Motor Off</td><td class="type-control">Control</td><td>No (ACK)</td></tr>
@@ -743,6 +761,48 @@ function switchTab(tabId) {
 <div class="note-box">
   <div class="note-title">부연설명</div>
   Encoder 값을 누적시켜 Multi-turn Angle 값을 DEG 값으로 출력한다. 본 값은 Encoder offset 값을 적용하여 계산되며 전원이 꺼진 이후에도 저장된다. 단, VESC-Tool을 이용한 펌웨어 업데이트시 초기화 된다.
+</div>
+
+
+<!-- 0x93 NEW v15 -->
+<hr>
+<h3><span class="cmd-id">0x93</span> Read Output Encoder <span style="color:#4CAF50;">NEW v15</span></h3>
+<p class="cmd-desc">감속기 <strong>출력축</strong>에 달린 MA600 엔코더를 읽는다.
+<code>0x90</code>·<code>0x92</code> 는 모터측 엔코더를 반환한다 &mdash; 둘은 기어비만큼 다른 값이다.</p>
+
+<div class="tx-frame"><span class="tx-label">TX:</span> [0x93, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]</div>
+
+<p><strong>RX:</strong></p>
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Unit</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0x93</td><td>uint8</td><td>&mdash;</td><td>Echo</td></tr>
+  <tr><td><code>DATA[1-2]</code></td><td>Output Single-Turn</td><td>uint16 LE</td>
+      <td>360/65536 deg / LSB</td><td>0 ~ 65535 = 0 ~ 360&deg;</td></tr>
+  <tr><td><code>DATA[3-6]</code></td><td>Output Multi-Turn</td><td>int32 LE</td>
+      <td>0.01 deg / LSB</td><td>누적값, 부호 있음</td></tr>
+  <tr><td><code>DATA[7]</code></td><td>Status</td><td>uint8</td><td>bitfield</td>
+      <td>b0 sensor valid / b1 forward LUT / b2 reverse LUT</td></tr>
+</table>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  <p><strong>어느 엔코더인가.</strong> SPN-MC V2 양산형은 모터측(정류용)과 출력축 MA600 두 개를 갖는다.
+  <code>0x90</code>/<code>0x92</code> 는 전자 를, <code>0x93</code> 은 후자 를 보고한다.
+  감속비가 8:1 이면 모터 8회전이 출력 1회전이므로 두 값은 근본적으로 다르다.</p>
+
+  <p><strong>Status 비트를 반드시 확인할 것.</strong>
+  <code>b0</code>가 0 이면 센서 읽기가 실패한 것이라 각도값을 쓰면 안 된다.
+  <code>b1</code>이 1 이면 single-turn 이 <code>or_outcal</code> LUT 로 보정된 값이고,
+  0 이면 <strong>미보정 raw</strong> 이다 &mdash; 캐리브레이션 전 보드는 오차가 30&deg; 에 이를 수 있다.
+  <code>b2</code>는 역방향 플랭크 LUT 까지 있는지(백래쉬 보정) 를 뜻한다.</p>
+
+  <p><strong>보드 종속.</strong> 펌웨어가 <code>USE_MA600_OUTPUT_ENCODER</code> 로 빌드된 보드만 응답한다.
+  출력 엔코더가 없는 보드는 이 명령에 아무 응답도 하지 않으므로, 호스트는 타임아웃을 두어야 한다.</p>
+
+  <p><strong>캐리브레이션.</strong> 출력 LUT 는 터미널 명령 <code>or_outcal</code> 로 생성해 EEPROM 에 저장된다.
+  기구 편심·자석 장착 오차를 보정하는 것이라 <strong>유닛마다 해야 하고 개체 간 이식이 안 된다.</strong>
+  EEPROM 에뮬레이션은 섹터 1·2 이고 앱은 섹터 3 부터라,
+  <strong>펌웨어 업데이트로는 캐리브레이션이 지워지지 않는다.</strong></p>
 </div>
 
 <!-- 0x9C NEW -->
@@ -2000,6 +2060,16 @@ Without protection, a large position step causes the PID to output maximum curre
     <td>v13</td>
     <td>2026-03-18</td>
     <td>EtherCAT Protocol documentation added (PDO/SDO/DC SYNC0/TwinCAT guide). SDO deferred EEPROM store for motor safety. 0x2020 Motor Parameters changed to RW. ESI XML DC-Synchron support. F405 foc_test_capture removed (RAM overflow fix). TwinCAT 3 verified with DC SYNC0.</td>
+  </tr>
+  <tr>
+    <td>v14</td>
+    <td>2026-03-26</td>
+    <td>Fault Latch mechanism &mdash; faults no longer self-clear; 0x9B Clear Error Flag added (CAN + EtherCAT SDO 0x2030:1). MIT Set Zero (0xC3) output-shaft offset in DATA[6:7]. MIT Control (0xC0) return enc_pos changed to output-shaft, MIT-zero referenced. Motor Tool v3.3.</td>
+  </tr>
+  <tr>
+    <td><strong>v15</strong></td>
+    <td>2026-08-31</td>
+    <td><strong>0x93 Read Output Encoder added</strong> &mdash; reads the MA600 on the geared output shaft. 0x90 / 0x92 both report the motor-side encoder, so the output had no CAN path. Returns single-turn (uint16), multi-turn (int32, 0.01 deg) and a status byte reporting sensor validity and whether an <code>or_outcal</code> LUT is applied. Answered only on boards built with <code>USE_MA600_OUTPUT_ENCODER</code>.</td>
   </tr>
 </table>
 
