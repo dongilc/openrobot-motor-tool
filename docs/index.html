@@ -497,25 +497,25 @@ function switchTab(tabId) {
 <div class="changelog">
   <h4>26-09-03 (v16)</h4>
   <ul>
-    <li><strong>0xA6 Current Brake 추가</strong> &mdash; RMD 프로토콜에는 제동 명령이 없었다.
-      <code>0x80</code> Motor Off 는 프리휠, <code>0x81</code> Motor Stop 은 dps 0 지령이라 둘 다 제동이 아니다.
-      <code>DATA[4:5]</code> int16 LE, <code>0xA1</code> 과 같은 digit 스케일(&plusmn;2048 = &plusmn;33A).
-      <strong>크기만 쓰며 부호는 무시된다.</strong></li>
-    <li><strong>동작 원리</strong> &mdash; FOC ISR 이 매 주기 회전 방향을 보고 iq 부호를 뒤집어 회전을 거스른다.
-      멈추면 스스로 놓는다. <code>0</code> 을 보내면 해제된다(<code>cc_min_current</code> 미만에서 PWM off).
-      전기각을 0 으로 고정해 자리를 붙드는 handbrake 와는 다른 기능이다.</li>
-    <li><strong>제동력 상한은 지령이 아니라 그 순간 속도가 정한다</strong> &mdash; 뽑을 수 있는 제동 전류는
-      역기전력과 임피던스가 정하는 값이 천장이다. 게다가 duty 가 <code>l_min_duty&times;1.5</code> 아래이고
-      실측 전류가 지령에 못 미치면 펌웨어가 <strong>3상 단락</strong>으로 전환하는데, 이때는 지령값 자체가
-      의미를 잃는다. 어느 값 이상에서 제동력이 더 늘지 않는 것은 정상이며, 속도를 올리면 그 무릎점도 올라간다.</li>
-    <li><strong>0xA6 번호에 대하여</strong> &mdash; 스톡 RMD 에서 이 번호는 Position Closed-Loop 4 지만,
-      본 펌웨어는 그 명령을 구현한 적이 없다(계속 주석 처리 상태). 충돌하지 않는다.</li>
-    <li><strong><code>or_brake</code> 터미널 명령</strong> &mdash; CAN 호스트 없이 벤치에서 확인용.
-      CAN 과 같은 함수를 타므로 여기서 본 동작이 CAN 에서도 그대로 성립한다.</li>
+    <li><strong>0xA6 Current Brake 추가</strong> &mdash; RMD 프로토콜에 제동 명령 부재.
+      <code>0x80</code> Motor Off 는 프리휠, <code>0x81</code> Motor Stop 은 dps 0 지령으로 둘 다 제동 아님.
+      <code>DATA[4:5]</code> int16 LE, <code>0xA1</code> 과 동일 digit 스케일(&plusmn;2048 = &plusmn;33A).
+      <strong>크기만 사용하며 부호는 무시됨.</strong></li>
+    <li><strong>동작 원리</strong> &mdash; FOC ISR 이 매 주기 회전 방향을 보고 iq 부호를 반전시켜 회전에 역행.
+      정지 시 자동 해제. <code>0</code> 전송 시 해제(<code>cc_min_current</code> 미만에서 PWM off).
+      전기각을 0 으로 고정해 자리를 붙드는 handbrake 와는 별개 기능.</li>
+    <li><strong>제동력 상한은 지령이 아닌 그 순간 속도가 결정</strong> &mdash; 가용 제동전류의 천장은
+      역기전력과 임피던스가 결정. duty 가 <code>l_min_duty&times;1.5</code> 아래이고 실측 전류가 지령 미달이면
+      펌웨어가 <strong>3상 단락</strong>으로 전환, 이 구간에서는 지령값 무의미.
+      특정 값 이상에서 제동력이 증가하지 않는 것은 정상이며, 속도 상승 시 무릎점도 상승.</li>
+    <li><strong>0xA6 번호</strong> &mdash; 스톡 RMD 에서는 Position Closed-Loop 4 이나
+      본 펌웨어는 미구현 상태(계속 주석 처리). 충돌 없음.</li>
+    <li><strong><code>or_brake</code> 터미널 명령</strong> &mdash; CAN 호스트 없이 벤치 확인용.
+      CAN 과 동일 함수 경로이므로 여기서 확인한 동작이 CAN 에서도 성립.</li>
     <li><strong>Motor Tool v3.9.1</strong> &mdash; RMD CAN 탭과 VESC EID 탭 <strong>양쪽에</strong> Current Brake
-      조작 추가. RMD 탭은 피드백 박스를 하단에 고정하고 조작반만 스크롤하도록 재구성.
+      조작 추가. RMD 탭은 피드백 박스 하단 고정 + 조작반만 스크롤하도록 재구성.
       <code>0xA6</code> 응답이 상태 프레임으로 처리되지 않아 RMD Feedback 이 갱신되지 않던 버그 수정.
-      피드백의 <code>Temp</code> 표기를 <code>Motor T.</code> 로 변경(보드 온도가 아니라 모터측 서미스터임을 명시).</li>
+      피드백의 <code>Temp</code> 표기를 <code>Motor T.</code> 로 변경(보드 온도가 아닌 모터측 서미스터임을 명시).</li>
   </ul>
 </div>
 
@@ -1159,8 +1159,8 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 </div>
 
 <h3><span class="cmd-id">0xA6</span> Current Brake</h3>
-<p class="cmd-desc">회전을 거슬러 세우는 제동. 크기만 지정하며 <strong>부호는 무시된다</strong> &mdash;
-제동 방향은 펌웨어가 실측 회전에서 판단한다.</p>
+<p class="cmd-desc">회전에 역행하여 정지시키는 제동. 크기만 지정하며 <strong>부호는 무시됨</strong> &mdash;
+제동 방향은 펌웨어가 실측 회전에서 판단.</p>
 
 <div class="tx-frame">
   <span class="tx-label">TX:</span> [0xA6, 0x00, 0x00, 0x00, Curr_Lo, Curr_Hi, 0x00, 0x00]
@@ -1178,17 +1178,17 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 
 <div class="note-box">
   <div class="note-title">부연설명</div>
-  <strong>0 을 보내면 해제된다.</strong> 설정된 <code>cc_min_current</code> 미만이면 펌웨어가 출력을 끄기 때문이다.<br><br>
-  <strong>멈추면 스스로 놓는다.</strong> FOC ISR 이 직전 대비 전기각 변화로 회전 방향을 판단해 iq 부호를 뒤집는데,
-  정지하면 그 변화가 0 이 되어 iq 도 0 이 된다. 자리를 계속 붙드는 기능이 아니다.<br><br>
-  <strong>제동력의 천장은 속도가 정한다.</strong> 뽑아낼 수 있는 제동 전류는 대략
-  <code>&lambda;&middot;&omega;_e / &radic;(R&sup2; + (&omega;_e&middot;L)&sup2;)</code> 로 제한된다.
-  또한 duty 가 <code>l_min_duty &times; 1.5</code> 아래로 내려가고 실측 전류가 지령에 못 미치면 펌웨어가
-  3상 단락으로 전환하며, 이 구간에서는 지령값이 결과에 영향을 주지 않는다.
-  <strong>따라서 어느 지점부터 제동력이 더 늘지 않는 것은 정상이다.</strong>
-  속도를 올리면 그 무릎점도 함께 올라간다.<br><br>
-  <strong>handbrake 와 다르다.</strong> handbrake 는 전기각을 0 으로 강제해 로터를 평형점에 못 박는 별개 기능이고,
-  FOC 에는 BLDC 의 full brake 에 해당하는 상태가 존재하지 않는다.
+  <strong>0 전송 시 해제.</strong> 설정된 <code>cc_min_current</code> 미만이면 펌웨어가 출력을 차단하기 때문임.<br><br>
+  <strong>정지 시 자동 해제.</strong> FOC ISR 이 직전 대비 전기각 변화로 회전 방향을 판단해 iq 부호를 반전시키는 구조로,
+  정지하면 변화량이 0 이 되어 iq 도 0 이 됨. 자리를 계속 붙드는 기능 아님.<br><br>
+  <strong>제동력의 천장은 속도가 결정.</strong> 가용 제동전류는 대략
+  <code>&lambda;&middot;&omega;_e / &radic;(R&sup2; + (&omega;_e&middot;L)&sup2;)</code> 로 제한됨.
+  또한 duty 가 <code>l_min_duty &times; 1.5</code> 아래이고 실측 전류가 지령에 미달하면 펌웨어가
+  3상 단락으로 전환, 이 구간에서는 지령값이 결과에 무영향.
+  <strong>따라서 특정 지점부터 제동력이 증가하지 않는 것은 정상.</strong>
+  속도 상승 시 무릎점도 함께 상승.<br><br>
+  <strong>handbrake 와 구분 필요.</strong> handbrake 는 전기각을 0 으로 강제해 로터를 평형점에 고정하는 별개 기능이며,
+  FOC 에는 BLDC 의 full brake 에 해당하는 상태 없음.
 </div>
 
 <!-- ============================================================ -->
