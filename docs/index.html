@@ -494,6 +494,31 @@ function switchTab(tabId) {
   </ul>
 </div>
 
+<div class="changelog">
+  <h4>26-09-03 (v16)</h4>
+  <ul>
+    <li><strong>0xA6 Current Brake 추가</strong> &mdash; RMD 프로토콜에는 제동 명령이 없었다.
+      <code>0x80</code> Motor Off 는 프리휠, <code>0x81</code> Motor Stop 은 dps 0 지령이라 둘 다 제동이 아니다.
+      <code>DATA[4:5]</code> int16 LE, <code>0xA1</code> 과 같은 digit 스케일(&plusmn;2048 = &plusmn;33A).
+      <strong>크기만 쓰며 부호는 무시된다.</strong></li>
+    <li><strong>동작 원리</strong> &mdash; FOC ISR 이 매 주기 회전 방향을 보고 iq 부호를 뒤집어 회전을 거스른다.
+      멈추면 스스로 놓는다. <code>0</code> 을 보내면 해제된다(<code>cc_min_current</code> 미만에서 PWM off).
+      전기각을 0 으로 고정해 자리를 붙드는 handbrake 와는 다른 기능이다.</li>
+    <li><strong>제동력 상한은 지령이 아니라 그 순간 속도가 정한다</strong> &mdash; 뽑을 수 있는 제동 전류는
+      역기전력과 임피던스가 정하는 값이 천장이다. 게다가 duty 가 <code>l_min_duty&times;1.5</code> 아래이고
+      실측 전류가 지령에 못 미치면 펌웨어가 <strong>3상 단락</strong>으로 전환하는데, 이때는 지령값 자체가
+      의미를 잃는다. 어느 값 이상에서 제동력이 더 늘지 않는 것은 정상이며, 속도를 올리면 그 무릎점도 올라간다.</li>
+    <li><strong>0xA6 번호에 대하여</strong> &mdash; 스톡 RMD 에서 이 번호는 Position Closed-Loop 4 지만,
+      본 펌웨어는 그 명령을 구현한 적이 없다(계속 주석 처리 상태). 충돌하지 않는다.</li>
+    <li><strong><code>or_brake</code> 터미널 명령</strong> &mdash; CAN 호스트 없이 벤치에서 확인용.
+      CAN 과 같은 함수를 타므로 여기서 본 동작이 CAN 에서도 그대로 성립한다.</li>
+    <li><strong>Motor Tool v3.9.1</strong> &mdash; RMD CAN 탭과 VESC EID 탭 <strong>양쪽에</strong> Current Brake
+      조작 추가. RMD 탭은 피드백 박스를 하단에 고정하고 조작반만 스크롤하도록 재구성.
+      <code>0xA6</code> 응답이 상태 프레임으로 처리되지 않아 RMD Feedback 이 갱신되지 않던 버그 수정.
+      피드백의 <code>Temp</code> 표기를 <code>Motor T.</code> 로 변경(보드 온도가 아니라 모터측 서미스터임을 명시).</li>
+  </ul>
+</div>
+
 <!-- ============================================================ -->
 <!-- GENERAL -->
 <!-- ============================================================ -->
@@ -517,7 +542,7 @@ function switchTab(tabId) {
 </div>
 
 <h3>Motor Status Response Format</h3>
-<p class="cmd-desc">공통 응답 포맷 &mdash; <code>0xA1</code>~<code>0xA4</code>, <code>0x9C</code>, <code>0xC0</code> 명령에 공통 적용</p>
+<p class="cmd-desc">공통 응답 포맷 &mdash; <code>0xA1</code>~<code>0xA6</code>, <code>0x9C</code>, <code>0xC0</code> 명령에 공통 적용</p>
 
 <table>
   <tr>
@@ -557,6 +582,7 @@ function switchTab(tabId) {
   <tr><td>Position closed-loop 1</td><td>0xA3</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="4">Position control (int32)</td></tr>
   <tr><td>Set Multiturn position</td><td>0xA4</td><td>NULL</td><td colspan="2">Speed limit</td><td colspan="4">Position control (int32)</td></tr>
   <tr><td><strong>Duty Closed-Loop</strong></td><td>0xA5</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="2">Duty (int16)</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>Current Brake</strong></td><td>0xA6</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="2">Brake current (int16)</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Read Fault Code</td><td>0xB0</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td><strong>Clear Error Flag</strong></td><td>0x9B</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Read Max Current</td><td>0xB1</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
@@ -594,6 +620,7 @@ function switchTab(tabId) {
   <tr><td>Position closed-loop 1</td><td>0xA3</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
   <tr><td>Set Multiturn position</td><td>0xA4</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
   <tr><td><strong>Duty Closed-Loop</strong></td><td>0xA5</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
+  <tr><td><strong>Current Brake</strong></td><td>0xA6</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
   <tr><td>Read Fault Code</td><td>0xB0</td><td>Code1</td><td>Code2</td><td>Code3</td><td>Code4</td><td>Code5</td><td>Code6</td><td>Code7</td></tr>
   <tr><td>Read Max Current</td><td>0xB1</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
   <tr><td>Write Max Current to ROM</td><td>0xB2</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
@@ -636,6 +663,7 @@ function switchTab(tabId) {
   <tr><td><code>0xA3</code></td><td>Position Closed-Loop 1</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
   <tr><td><code>0xA4</code></td><td>Set Multiturn Position</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
   <tr><td><code>0xA5</code></td><td>Duty Closed-Loop</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
+  <tr><td><code>0xA6</code></td><td>Current Brake</td><td class="type-control">Control</td><td><strong>Yes</strong></td></tr>
   <tr><td><code>0xB0</code></td><td>Read Fault Code</td><td class="type-read">Read</td><td>No (fault codes)</td></tr>
   <tr><td><code>0xB1</code></td><td>Read Max Current</td><td class="type-read">Read</td><td>No (current limits)</td></tr>
   <tr><td><code>0xB2</code></td><td>Write Max Current to ROM</td><td class="type-write">Write</td><td>No (echo)</td></tr>
@@ -1128,6 +1156,39 @@ Based on RMD protocol 0x9D with <code>control_mode</code> added in DATA[1] (orig
 <div class="note-box">
   <div class="note-title">부연설명</div>
   Duty 0.1 = 10% PWM. 양수는 정방향, 음수는 역방향. 속도/위치 피드백 없이 직접 PWM을 제어하므로 무부하 시 속도가 공급전압에 비례한다.
+</div>
+
+<h3><span class="cmd-id">0xA6</span> Current Brake</h3>
+<p class="cmd-desc">회전을 거슬러 세우는 제동. 크기만 지정하며 <strong>부호는 무시된다</strong> &mdash;
+제동 방향은 펌웨어가 실측 회전에서 판단한다.</p>
+
+<div class="tx-frame">
+  <span class="tx-label">TX:</span> [0xA6, 0x00, 0x00, 0x00, Curr_Lo, Curr_Hi, 0x00, 0x00]
+</div>
+
+<table>
+  <tr><th>Byte</th><th>Field</th><th>Type</th><th>Note</th></tr>
+  <tr><td><code>DATA[0]</code></td><td>0xA6</td><td>uint8</td><td>Command</td></tr>
+  <tr><td><code>DATA[1-3]</code></td><td>Reserved</td><td>-</td><td>0x00</td></tr>
+  <tr><td><code>DATA[4-5]</code></td><td>Brake current</td><td>int16 LE</td><td>0 ~ 2048 (= 0 ~ 33A), <code>0xA1</code> 과 동일 스케일</td></tr>
+  <tr><td><code>DATA[6-7]</code></td><td>Reserved</td><td>-</td><td>0x00</td></tr>
+</table>
+
+<p><strong>RX:</strong> Motor Status Response (공통 포맷 &mdash; temp, torque current, speed, encoder pos)</p>
+
+<div class="note-box">
+  <div class="note-title">부연설명</div>
+  <strong>0 을 보내면 해제된다.</strong> 설정된 <code>cc_min_current</code> 미만이면 펌웨어가 출력을 끄기 때문이다.<br><br>
+  <strong>멈추면 스스로 놓는다.</strong> FOC ISR 이 직전 대비 전기각 변화로 회전 방향을 판단해 iq 부호를 뒤집는데,
+  정지하면 그 변화가 0 이 되어 iq 도 0 이 된다. 자리를 계속 붙드는 기능이 아니다.<br><br>
+  <strong>제동력의 천장은 속도가 정한다.</strong> 뽑아낼 수 있는 제동 전류는 대략
+  <code>&lambda;&middot;&omega;_e / &radic;(R&sup2; + (&omega;_e&middot;L)&sup2;)</code> 로 제한된다.
+  또한 duty 가 <code>l_min_duty &times; 1.5</code> 아래로 내려가고 실측 전류가 지령에 못 미치면 펌웨어가
+  3상 단락으로 전환하며, 이 구간에서는 지령값이 결과에 영향을 주지 않는다.
+  <strong>따라서 어느 지점부터 제동력이 더 늘지 않는 것은 정상이다.</strong>
+  속도를 올리면 그 무릎점도 함께 올라간다.<br><br>
+  <strong>handbrake 와 다르다.</strong> handbrake 는 전기각을 0 으로 강제해 로터를 평형점에 못 박는 별개 기능이고,
+  FOC 에는 BLDC 의 full brake 에 해당하는 상태가 존재하지 않는다.
 </div>
 
 <!-- ============================================================ -->
@@ -2063,9 +2124,14 @@ Without protection, a large position step causes the PID to output maximum curre
     <td>Fault Latch mechanism &mdash; faults no longer self-clear; 0x9B Clear Error Flag added (CAN + EtherCAT SDO 0x2030:1). MIT Set Zero (0xC3) output-shaft offset in DATA[6:7]. MIT Control (0xC0) return enc_pos changed to output-shaft, MIT-zero referenced. Motor Tool v3.3.</td>
   </tr>
   <tr>
-    <td><strong>v15</strong></td>
+    <td>v15</td>
     <td>2026-08-31</td>
     <td>0x93 Read Output Encoder added &mdash; geared output shaft MA600. single-turn (uint16, 360/65536 deg/LSB), multi-turn (int32, 0.01 deg/LSB), status byte (sensor valid / forward LUT / reverse LUT). 0x90 and 0x92 report the input-shaft encoder. Answered only on boards built with USE_MA600_OUTPUT_ENCODER. Output LUT is generated by or_outcal and stored in EEPROM.</td>
+  </tr>
+  <tr style="background: var(--new-bg); font-weight: 600;">
+    <td><strong>v16</strong></td>
+    <td>2026-09-03</td>
+    <td>0xA6 Current Brake added &mdash; RMD had no braking command at all (0x80 free-wheels, 0x81 commands zero dps). Magnitude only in DATA[4:5], same digit scale as 0xA1; the firmware derives the braking direction from measured rotation and releases by itself at standstill. Sending 0 releases the brake. Braking force is bounded by speed, not by the command &mdash; below l_min_duty&times;1.5 the firmware short-circuits the phases and the commanded value stops mattering, so a plateau above some current is expected. or_brake terminal command added. Motor Tool v3.9.1: Current Brake control on both the RMD CAN and VESC EID tabs, RMD tab feedback pinned while the controls scroll, and a fix for 0xA6 responses not updating the feedback box.</td>
   </tr>
 </table>
 
