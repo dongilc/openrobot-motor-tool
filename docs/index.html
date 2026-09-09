@@ -530,9 +530,9 @@ function switchTab(tabId) {
     <li><strong><code>0xC5</code> 는 모터 구동 중 거부</strong> &mdash; 에뮬레이션 EEPROM 이 플래시에 있고 F405 는 코드도
       플래시에서 실행하므로, 쓰기 중 FOC ISR 이 굶음. 그동안 <code>0xC5</code> 는 상태 확인 없이 CAN 수신 경로에서
       곧바로 플래시를 쓰고 있었음. 거부 시 아무것도 바뀌지 않고 응답에 <strong>변경 전 값</strong>이 실림.</li>
-    <li><strong>버그 수정: 일부만 채운 CAN 응답이 스택 내용을 유출</strong> &mdash;
+    <li><strong>버그 수정: 일부만 채운 CAN 응답에 스택 잔재가 실려 나감</strong> &mdash;
       <code>decode_msg_sid</code> 의 응답 버퍼가 초기화되지 않은 채 항상 8바이트로 전송되어,
-      선두 1~2바이트만 채우는 <code>0xC1</code>/<code>0xC2</code> 등은 나머지에 직전 프레임이나 스택 잔재를 실어 보내고 있었음.</li>
+      선두 1~2바이트만 채우는 <code>0xC1</code>/<code>0xC2</code> 등은 나머지 바이트가 매번 달라짐. 응답 바이트를 프로토콜 확장에 쓸 수 없다는 것이 실질적 문제이며, 구 펌웨어 판별을 <code>0xC4</code> byte[7] 로 하는 이유도 이것임 &mdash; 그 자리만 원래부터 <code>0</code> 을 명시 대입하고 있었음.</li>
     <li><strong>Kd 상한이 곧 사용 가능 범위는 아님</strong> &mdash; SPN-MC V2 + 9:1 기준 Kd 12~13 부근부터 진동 관측됨.
       이 한계는 모터/감속비/엔코더 노이즈에서 오므로 기계마다 다름.
       무부하에서 단계적으로 올리며 전류 포화를 함께 확인할 것.</li>
@@ -2166,7 +2166,7 @@ Without protection, a large position step causes the PID to output maximum curre
   <tr style="background: var(--new-bg); font-weight: 600;">
     <td><strong>v17</strong></td>
     <td>2026-09-10</td>
-    <td>MIT Kd gain scale added &mdash; Kd is 8 bits on the wire, so widening its range necessarily coarsens the LSB by the same factor. The multiplier is therefore per board rather than global, and defaults to 1, which is the original protocol byte for byte: kd = kd_raw &times; (5.0/255) &times; kd_scale, scale 1&ndash;8 giving Kd 0~5.0 up to 0~40.0. It rides in DATA[7] of 0xC5, which was reserved; a request of 0 keeps the stored value, and that is what every existing master already sends. DATA[7] of the 0xC4 reply carries the value in force and reads 0 on firmware without the field, so a master that sees 0 stays at scale 1. 0xC1 echoes it in DATA[1]. 0xC5 is now refused while the motor runs, because the emulated EEPROM is a flash write that starves the FOC ISR; the reply then carries the unchanged values. Fixed: partially-filled CAN replies (0xC1, 0xC2 and others) were transmitting uninitialised stack contents in the bytes they did not set. Note that the Kd ceiling is not the usable range &mdash; SPN-MC V2 with a 9:1 gearbox starts oscillating around 12&ndash;13, which is a property of the machine, not the protocol. Motor Tool v3.9.2.</td>
+    <td>MIT Kd gain scale added &mdash; Kd is 8 bits on the wire, so widening its range necessarily coarsens the LSB by the same factor. The multiplier is therefore per board rather than global, and defaults to 1, which is the original protocol byte for byte: kd = kd_raw &times; (5.0/255) &times; kd_scale, scale 1&ndash;8 giving Kd 0~5.0 up to 0~40.0. It rides in DATA[7] of 0xC5, which was reserved; a request of 0 keeps the stored value, and that is what every existing master already sends. DATA[7] of the 0xC4 reply carries the value in force and reads 0 on firmware without the field, so a master that sees 0 stays at scale 1. 0xC1 echoes it in DATA[1]. 0xC5 is now refused while the motor runs, because the emulated EEPROM is a flash write that starves the FOC ISR; the reply then carries the unchanged values. Fixed: partially-filled CAN replies (0xC1, 0xC2 and others) sent leftover stack bytes in the positions they did not set, so those bytes differed from call to call and could not be used to extend the protocol. Note that the Kd ceiling is not the usable range &mdash; SPN-MC V2 with a 9:1 gearbox starts oscillating around 12&ndash;13, which is a property of the machine, not the protocol. Motor Tool v3.9.2.</td>
   </tr>
 </table>
 
