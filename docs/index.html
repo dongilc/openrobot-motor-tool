@@ -595,6 +595,7 @@ function switchTab(tabId) {
   <tr><td>Write current pos as zero</td><td>0x19</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Read multi turns angle</td><td>0x92</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td><strong>Read output encoder</strong></td><td>0x93</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
+  <tr><td><strong>Clear Error Flag</strong></td><td>0x9B</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td><strong>Read Motor Status 2</strong></td><td>0x9C</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td><strong>Read Motor Status 3</strong></td><td>0x9D</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Motor off</td><td>0x80</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
@@ -607,13 +608,11 @@ function switchTab(tabId) {
   <tr><td><strong>Duty Closed-Loop</strong></td><td>0xA5</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="2">Duty (int16)</td><td>NULL</td><td>NULL</td></tr>
   <tr><td><strong>Current Brake</strong></td><td>0xA6</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="2">Brake current (int16)</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Read Fault Code</td><td>0xB0</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr><td><strong>Clear Error Flag</strong></td><td>0x9B</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Read Max Current</td><td>0xB1</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td>Write Max Current to ROM</td><td>0xB2</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
   <tr><td><strong>MIT Control</strong></td><td>0xC0</td><td colspan="2">p_des (16bit)</td><td>v_hi (8bit)</td><td>v_lo4|kp_hi4</td><td>kp_lo (8bit)</td><td>Kd (8bit)</td><td>&tau;_ff (8bit)</td></tr>
   <tr><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr><td><strong>Clear Error Flag</strong></td><td>0x9B</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="2">Offset (int16)</td></tr>
   <tr><td><strong>Read MIT Params</strong></td><td>0xC4</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td><strong>Write MIT Params to ROM</strong></td><td>0xC5</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_input (uint16)</td><td colspan="2">GR (uint16)</td><td>kd_scale</td></tr>
@@ -633,6 +632,7 @@ function switchTab(tabId) {
   <tr><td>Write current pos as zero</td><td>0x19</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td colspan="2">Encoder offset</td></tr>
   <tr><td>Read multi turns angle</td><td>0x92</td><td colspan="7">Multi-turn Angle (7 bytes LE)</td></tr>
   <tr><td><strong>Read output encoder</strong></td><td>0x93</td><td colspan="2">Output single-turn</td><td colspan="4">Output multi-turn</td><td>Status</td></tr>
+  <tr><td><strong>Clear Error Flag</strong></td><td>0x9B</td><td>Fault Code</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
   <tr><td><strong>Read Motor Status 2</strong></td><td>0x9C</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed</td><td colspan="2">Encoder Pos</td></tr>
   <tr><td><strong>Read Motor Status 3</strong></td><td>0x9D</td><td>Control Mode</td><td colspan="2">Phase A Curr</td><td colspan="2">Phase B Curr</td><td colspan="2">Phase C Curr</td></tr>
   <tr><td>Motor off</td><td>0x80</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
@@ -647,7 +647,6 @@ function switchTab(tabId) {
   <tr><td>Read Fault Code</td><td>0xB0</td><td>Code1</td><td>Code2</td><td>Code3</td><td>Code4</td><td>Code5</td><td>Code6</td><td>Code7</td></tr>
   <tr><td>Read Max Current</td><td>0xB1</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
   <tr><td>Write Max Current to ROM</td><td>0xB2</td><td>oc_mode</td><td colspan="2">Motor Curr. Max</td><td colspan="2">Motor Curr. Abs Max</td><td colspan="2">Bat Curr. Max</td></tr>
-  <tr><td><strong>Clear Error Flag</strong></td><td>0x9B</td><td>Fault Code</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
   <tr><td><strong>MIT Control</strong></td><td>0xC0</td><td>Motor_temp</td><td colspan="2">Torque Current</td><td colspan="2">Speed (out dps)</td><td colspan="2">Position (int16, &plusmn;12.56rad)</td></tr>
   <tr><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
   <tr><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
