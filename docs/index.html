@@ -517,6 +517,30 @@ function switchTab(tabId) {
       <code>0xA6</code> 응답이 상태 프레임으로 처리되지 않아 RMD Feedback 이 갱신되지 않던 버그 수정.
       피드백의 <code>Temp</code> 표기를 <code>Motor T.</code> 로 변경(보드 온도가 아닌 모터측 서미스터임을 명시).</li>
   </ul>
+
+  <h4>26-09-10 (v17)</h4>
+  <ul>
+    <li><strong>MIT Kd 게인 스케일</strong> &mdash; Kd 는 8bit 고정이라 범위를 넓히면 LSB 도 반드시 같이 거칠어진다.
+      전역으로 넓혀 모두의 분해능을 희생시키는 대신, <strong>보드별 배수</strong>를 두고 기본값 1 은
+      기존 프로토콜과 바이트 단위로 동일하게 유지했다.<br>
+      <code>kd = kd_raw &times; (5.0/255) &times; kd_scale</code> &nbsp; (scale 1~8 &rarr; Kd 0~5.0 ~ 0~40.0)</li>
+    <li><strong>기존 예약 바이트 사용, 새 명령 없음</strong> &mdash; <code>0xC5</code> DATA[7] 이 예약(NULL)이었으므로
+      여기에 실었다. 요청값 <code>0</code> = 기존 값 유지이고 이는 기존 마스터가 이미 보내던 값이라
+      <strong>영향받는 마스터가 없다.</strong> <code>0xC4</code> 응답 DATA[7] 은 현재 적용값을 반환하며,
+      이 필드가 없는 구 펌웨어는 <code>0</code> 을 반환한다. <code>0xC1</code> 응답 DATA[1] 에도 에코된다.</li>
+    <li><strong><code>0xC5</code> 구동 중 거부</strong> &mdash; 에뮬레이션 EEPROM 이 플래시에 있고 F405 는 코드도
+      플래시에서 실행하므로 쓰기 중 FOC ISR 이 굶는다. 지금까지 <code>0xC5</code> 는 상태 확인 없이
+      CAN 수신 경로에서 곧바로 플래시를 썼다. 거부 시 아무것도 바뀌지 않고 응답에 변경 전 값이 실린다.</li>
+    <li><strong>버그 수정: 일부만 채운 CAN 응답이 스택 내용을 흘리고 있었다</strong> &mdash;
+      <code>decode_msg_sid</code> 의 응답 버퍼가 초기화되지 않은 채 항상 8바이트로 전송되어,
+      선두 1~2바이트만 채우는 <code>0xC1</code>/<code>0xC2</code> 등은 나머지에 직전 프레임이나 스택 잔재를 실어 보냈다.</li>
+    <li><strong>Kd 상한이 곧 사용 가능 범위는 아니다</strong> &mdash; SPN-MC V2 + 9:1 기준
+      Kd 12~13 부근부터 진동이 관측된다. 이 한계는 모터/감속비/엔코더 노이즈에서 오므로 기계마다 다르다.
+      무부하에서 단계적으로 올리며 전류 포화를 함께 확인할 것.</li>
+    <li><strong>Motor Tool v3.9.2</strong> &mdash; MIT Mode Parameters 에 Kd scale 입력 추가(<code>Write to ROM</code> 이 함께 전송).
+      보드별로 scale 을 기억하고 지령 대상 중 <strong>가장 낮은 값</strong>을 사용하므로, 아직 응답을 받지 못한 보드에는
+      배율이 적용된 명령이 나가지 않는다. <code>0xC4</code>/<code>0xC1</code> 응답 로그 추가.</li>
+  </ul>
 </div>
 
 <!-- ============================================================ -->
@@ -593,7 +617,7 @@ function switchTab(tabId) {
   <tr><td><strong>Clear Error Flag</strong></td><td>0x9B</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
   <tr><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td colspan="2">Offset (int16)</td></tr>
   <tr><td><strong>Read MIT Params</strong></td><td>0xC4</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
-  <tr><td><strong>Write MIT Params to ROM</strong></td><td>0xC5</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_input (uint16)</td><td colspan="2">GR (uint16)</td><td>NULL</td></tr>
+  <tr><td><strong>Write MIT Params to ROM</strong></td><td>0xC5</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_input (uint16)</td><td colspan="2">GR (uint16)</td><td>kd_scale</td></tr>
   <tr><td><strong>Read External Sensor</strong></td><td>0xD0</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td><td>NULL</td></tr>
 </table>
 
@@ -629,7 +653,7 @@ function switchTab(tabId) {
   <tr><td><strong>MIT Enter Motor Mode</strong></td><td>0xC1</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
   <tr><td><strong>MIT Exit Motor Mode</strong></td><td>0xC2</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td></tr>
   <tr><td><strong>MIT Set Zero Position</strong></td><td>0xC3</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td>0x00</td><td colspan="2">Offset echo</td></tr>
-  <tr><td><strong>Read MIT Params / Write MIT Params</strong></td><td>0xC4</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_out (uint16)</td><td colspan="2">GR (uint16)</td><td>0x00</td></tr>
+  <tr><td><strong>Read MIT Params / Write MIT Params</strong></td><td>0xC4</td><td>v_max</td><td>t_max</td><td colspan="2">Kt_out (uint16)</td><td colspan="2">GR (uint16)</td><td>kd_scale</td></tr>
   <tr><td><strong>Read External Sensor</strong></td><td>0xD0</td><td>valid</td><td colspan="2">Temperature</td><td colspan="2">Pressure</td><td colspan="2">Atmosphere</td></tr>
 </table>
 
@@ -1471,7 +1495,13 @@ Without protection, a large position step causes the PID to output maximum curre
   &bull; <strong>Kt_out</strong> = Kt_input &times; GR: 출력단 토크 상수 (Nm/A). &tau;_out을 Kt_out으로 나누어 iq 전류를 계산.<br>
   &bull; <strong>Kt_input</strong>: 모터단 토크 상수 (Nm/A). 0이면 MCCONF의 <code>flux_linkage</code>와 <code>pole_pairs</code>에서 자동 계산 (<code>Kt = 1.5 &times; (p/2) &times; flux</code>).<br>
   &bull; GR=1 (직결)이면 모터단 = 출력단. 감속기 부착 시 GR을 설정하면 모든 파라미터가 출력단 기준으로 동작.<br>
-  &bull; <code>0xC4</code> Read / <code>0xC5</code> Write to ROM으로 설정 변경. 부팅 시 EEPROM에서 자동 로드.
+  &bull; <code>0xC4</code> Read / <code>0xC5</code> Write to ROM으로 설정 변경. 부팅 시 EEPROM에서 자동 로드.<br>
+  &bull; <code>0xC5</code> DATA[7] = <strong>kd_scale</strong> (1~8). <code>0</code> 또는 범위 밖 값은 <strong>기존 값 유지</strong>이며,
+  이는 기존 마스터가 이미 보내던 값이므로 하위 호환됨. <code>0xC4</code> 응답 DATA[7] 은 <strong>현재 적용 중인 값</strong>을 반환하고,
+  이 필드가 없는 구 펌웨어는 <code>0</code> 을 반환하므로 마스터는 이를 보고 scale 1 을 유지하면 됨.<br>
+  &bull; <strong><code>0xC5</code> 는 모터 구동 중에는 거부됨</strong> &mdash; 에뮬레이션 EEPROM 이 플래시에 있고 F405 는 코드도 플래시에서
+  실행하므로, 쓰기 중 FOC ISR 이 굶는다. 거부 시 아무것도 바뀌지 않고 응답에 <strong>변경 전 값</strong>이 실려 오므로,
+  요청값과 비교하면 반영 여부를 알 수 있음.
 </div>
 
 <!-- ── Parameter Descriptions ── -->
@@ -1493,9 +1523,11 @@ Without protection, a large position step causes the PID to output maximum curre
     <em>예: Kp=10이면 1 rad 오차 시 10 Nm의 복원 토크 발생.</em></td>
   </tr>
   <tr>
-    <td><strong>Kd</strong></td><td>Nm&middot;s/rad</td><td>0&ndash;5</td>
+    <td><strong>Kd</strong></td><td>Nm&middot;s/rad</td><td>0&ndash;5 &times; kd_scale</td>
     <td><strong>속도 감쇠 (댐퍼 상수).</strong> 출력단 속도 오차 1 rad/s당 발생시킬 토크(Nm). Kp와 함께 사용하면 진동을 억제하고, 단독(Kp=0)으로 사용하면 점성 마찰처럼 동작.<br>
-    <em>예: Kd=0.5이면 1 rad/s 속도 오차 시 0.5 Nm의 감쇠 토크 발생.</em></td>
+    <em>예: Kd=0.5이면 1 rad/s 속도 오차 시 0.5 Nm의 감쇠 토크 발생.</em><br>
+    상한은 보드별 <code>kd_scale</code>(1~8, EEPROM)에 비례. 기본 <code>kd_scale=1</code> 이면 0~5.
+    <strong>범위는 분해능과 맞바꾸는 것</strong> &mdash; 8bit 고정이므로 scale 을 올리면 LSB 도 같은 배수로 거칠어짐.</td>
   </tr>
   <tr>
     <td><strong>&tau;_ff</strong></td><td>Nm</td><td>&plusmn;T_MAX</td>
@@ -1625,7 +1657,7 @@ Without protection, a large position step causes the PID to output maximum curre
   <tr><td>p_des (position)</td><td>16</td><td>&plusmn;12.5 rad</td><td>0.0004 rad (0.02&deg;)</td><td>DATA[1-2]</td></tr>
   <tr><td>v_des (velocity)</td><td>12</td><td>&plusmn;V_MAX rad/s (default 45)</td><td>V_MAX/2048</td><td>DATA[3] + DATA[4] hi-nibble</td></tr>
   <tr><td>Kp (stiffness)</td><td>12</td><td>0&ndash;500 Nm/rad</td><td>0.122</td><td>DATA[4] lo-nibble + DATA[5]</td></tr>
-  <tr><td>Kd (damping)</td><td>8</td><td>0&ndash;5 Nm&middot;s/rad</td><td>0.020</td><td>DATA[6]</td></tr>
+  <tr><td>Kd (damping)</td><td>8</td><td>0&ndash;5&times;kd_scale Nm&middot;s/rad (default 0&ndash;5)</td><td>0.0196&times;kd_scale</td><td>DATA[6]</td></tr>
   <tr><td>&tau;_ff (feedforward)</td><td>8</td><td>&plusmn;T_MAX Nm (default 33)</td><td>T_MAX/128</td><td>DATA[7]</td></tr>
 </table>
 
