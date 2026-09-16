@@ -41,6 +41,8 @@ OpenRobot 모터 컨트롤러용 GUI 도구입니다. **CAN-Only 아키텍처** 
 - **OS**: Windows 10/11 (64-bit)
 - **CAN 드라이버** — PCAN 드라이버 (PCAN-USB) **또는** slcan 펌웨어가 적재된 CANable 2.0 (Win10/11 에서 별도 드라이버 불필요)
 
+- **EtherCAT (선택)** — EtherCAT 을 사용하려면 **[Npcap](https://npcap.com/#download) 설치가 필수**입니다. 공식 사이트에서 직접 내려받아 설치하십시오 (Npcap 라이선스상 본 배포에 포함하지 않습니다). EtherCAT 사용 시 도구를 관리자 권한으로 실행해야 하며, 필요하면 도구가 관리자 권한 재시작을 안내합니다.
+
 ### 하드웨어
 - **OpenRobot Motor Controller** — 다음 중 하나:
   - **SPN-MC1 V1R2** (60V class)

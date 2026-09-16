@@ -41,6 +41,8 @@ No installation required — single executable.
 - **OS**: Windows 10/11 (64-bit)
 - **CAN driver** — PCAN driver (PCAN-USB) **or** CANable 2.0 with slcan firmware (no extra driver needed on Win10/11)
 
+- **EtherCAT (optional)** — **[Npcap](https://npcap.com/#download) must be installed** to use EtherCAT. Download it from the official site and install it yourself (it is not bundled, per the Npcap license). Run the tool as Administrator for EtherCAT; it offers to restart elevated if needed.
+
 ### Hardware
 - **OpenRobot Motor Controller** — one of the following:
   - **SPN-MC1 V1R2** (60V class)
