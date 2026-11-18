@@ -8,6 +8,8 @@ GUI tool for OpenRobot motor controllers. **CAN-Only architecture** — communic
 
 > Production flashing and inspection: **[OpenRobot ST-Link Tool](https://github.com/dongilc/openrobot-stlink-tool)**
 
+> **[Inertia Tune and the New Position Control](docs/position_control.md)**: how the inertia-based position loop works, how to measure J, settings and behaviour by command (firmware 261119+)
+
 ## Download
 
 Download the latest version from **[Releases](https://github.com/dongilc/openrobot-motor-tool/releases/latest)**:

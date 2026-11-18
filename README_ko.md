@@ -8,6 +8,8 @@ OpenRobot 모터 컨트롤러용 GUI 도구입니다. **CAN-Only 아키텍처** 
 
 > 양산 굽기와 검사: **[OpenRobot ST-Link Tool](https://github.com/dongilc/openrobot-stlink-tool)**
 
+> **[관성 튜닝과 새 위치 제어](docs/position_control_ko.md)**: 관성 기반 위치 루프의 원리, J 측정법, 설정, 명령별 동작 (펌웨어 261119 이후)
+
 ## 다운로드
 
 최신 버전은 **[Releases](https://github.com/dongilc/openrobot-motor-tool/releases/latest)** 에서 다운로드:
