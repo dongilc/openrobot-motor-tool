@@ -1,125 +1,120 @@
 # Inertia Tune and the New Position Control
 
-> English | **[한국어](position_control_ko.md)**
+> English | [한국어](position_control_ko.md)
 
-Firmware 261119 (Motor Tool v3.9.5) adds a second way to run the position loop. It is called **new
-position control** in the tools and `or_ctl` on the terminal. It is **off by default**: a board
-behaves as before until it is turned on.
+Firmware 261119 (Motor Tool v3.9.5) adds a new mode for the position loop, shown as "new position
+control" in the tools and set with the `or_ctl` terminal command. It is off by default; with it off,
+the board behaves as in earlier firmware.
 
 Boards: SPN-MC V2 / V2R2, SPN-MC D17_D20, SPN-MC D14, VESCAT HIGH V2R2 / V2R3 / V2R4.
 
-## 1. What it changes
+## 1. Overview
 
-The existing position loop (mcconf `p_pid_kp / ki / kd`) makes torque from the position error only.
-To push through friction or hold a load it needs a large error, so stiff settings come with overshoot,
-and the gains have to be found by hand for each actuator and load.
+The existing position loop (mcconf `p_pid_kp / ki / kd`) generates torque from the position error only.
+Overcoming friction or holding a load requires a larger error, higher gains cause overshoot, and the
+gains must be tuned separately for each actuator and load.
 
-The new position control computes the current command directly in amps, from one measured number,
-the **inertia J**:
+The new position control sets its gains from the measured inertia J and computes the current command (A) as:
 
 ```
 iq = kp * (p_ref - p) + kd * (v_ref - v) + J * a_ref + d_hat
 
-kp = J * (2*pi*bw)^2          bw   = loop bandwidth  (default 31.5 Hz)
-kd = J * 2*zeta*(2*pi*bw)     zeta = damping         (default 1.0)
+kp = J * (2*pi*bw)^2          bw   : loop bandwidth (default 31.5 Hz)
+kd = J * 2*zeta*(2*pi*bw)     zeta : damping ratio  (default 1.0)
 ```
 
-- **Inertia feed-forward** `J * a_ref`: the current needed to accelerate is applied up front, so the
-  shaft does not have to fall behind first.
-- **Disturbance observer** `d_hat` (DOB, default 15 Hz): estimates the torque the model does not
-  explain (friction, gravity, a constant load) and cancels it. The shaft settles on target with no
-  integral term and no droop under a hanging load.
-- **Gains follow J**: a heavier load gets proportionally larger gains, so the response stays the same
-  shape. Re-measure J when the load changes.
+- `J * a_ref`: inertia feed-forward. Adds the current needed for the target acceleration.
+- `d_hat`: output of the disturbance observer (DOB, default 15 Hz). Estimates and compensates torque not
+  in the model, such as friction, gravity and constant loads. No steady-state error without an integral term.
+- kp and kd scale with J, so the response characteristics stay the same for different loads. J has to be
+  re-measured when the load changes.
 
-All positions are **motor shaft degrees** (output = motor / gear ratio). J is in A/(deg/s²) at the
+Positions are in motor shaft degrees. Output angle = motor angle / gear ratio. J is in A/(deg/s²) at the
 motor shaft.
 
 ## 2. Measuring J (Inertia Tune)
 
 ### Motor Tool
 
-Parameter tab, below Detect Encoder: **Inertia Tune**.
+Parameter tab, Inertia Tune button below Detect Encoder.
 
-1. Connect the board, attach the load you will run with (or nothing, for a bare actuator).
-   The load must be fixed rigidly to the output.
-2. Make sure the output can move freely by ± the amplitude (default 15° motor = 15° / gear ratio at the
-   output).
-3. Leave **Turn on** and **Save** checked if the result should be used right away and kept after a reboot.
-4. Press **Inertia Tune**. The board holds its present position and shakes around it with a sine at
-   3, 6 and 10 Hz, twice. This takes about 30 seconds plus communication time. **Stop** ends after the current shake.
-5. The tool solves J from the measured current and motion and checks the result:
-   - how well the model fits the measurement,
-   - whether 6 Hz and 10 Hz give the same J,
-   - whether the two runs agree,
-   - whether the current hit its limit.
-6. On a pass it shows J and the commands it will send (`or_ctl j <J>`, `or_ctl on`, `or_ctl save`) and
-   asks before sending. On a failure nothing is applied.
+1. Connect the board and fix the load to the output. For a bare actuator, run without a load.
+2. Check that the output can move by the amplitude in both directions. Default amplitude is 15° at the
+   motor (15° / gear ratio at the output).
+3. Check Turn on and Save to apply the result immediately and keep it after reboot.
+4. Click Inertia Tune. The board applies 3, 6 and 10 Hz sine excitation around the present position,
+   twice. Takes about 30 s plus communication time. Stop ends after the current excitation.
+5. J is computed from the measured current and position, and checked for:
+   - fit between model and measurement
+   - agreement between the 6 Hz and 10 Hz results
+   - agreement between run 1 and run 2
+   - current limit reached or not
+6. On pass, J and the commands to be sent (`or_ctl j <J>`, `or_ctl on`, `or_ctl save`) are shown and sent
+   after confirmation. On fail, nothing is applied.
 
-A failure usually means the load is not rigid: a weight hanging on a string, a loose coupling, or a
-resonance in the fixture. Fix the load or change the amplitude and try again.
+Failures are mostly caused by a load that is not fixed rigidly (a weight on a string, coupling backlash,
+fixture resonance). Fix the load or change the amplitude and measure again.
 
 ### ST-Link Tool (production)
 
-Step 14 of the production inspection measures J on the bare actuator, turns the new position control
-on and saves it, reboots the board to confirm it was stored, then records the closed-loop frequency
-response and a step response in the test report. Units that pass step 14 ship with the new position
-control on. If step 14 is skipped, the unit ships with it off.
+Production step 14 measures J of the bare actuator, enables the new position control and saves it. The
+board is rebooted to confirm the setting was stored, and the closed-loop frequency response and step
+response are recorded in the test report. Units that pass step 14 ship with the new position control on;
+if step 14 is skipped, they ship with it off.
 
-A unit tuned bare and then built into a robot joint carries more inertia. The disturbance observer
-keeps it stable and on target, but for the intended response re-run Inertia Tune with the joint attached.
+An actuator tuned bare and then installed in a joint has a larger inertia. The disturbance observer keeps
+it stable and accurate, but to get the designed response, run Inertia Tune again in the assembled state.
 
 ## 3. Commands and settings
 
-Terminal (Motor Tool terminal, or VESC Tool terminal):
+Enter in the Motor Tool terminal or the VESC Tool terminal.
 
-| Command | Range | Default | Meaning |
+| Command | Range | Default | Description |
 |---|---|---|---|
-| `or_ctl` | | | Show state, J, bw, zeta, resulting kp / kd, DOB estimate, trajectory limit |
-| `or_ctl on` / `off` | | off | Use / stop using the new position control (needs J) |
+| `or_ctl` | | | Show state, J, bw, zeta, kp / kd, DOB estimate, trajectory acceleration |
+| `or_ctl on` / `off` | | off | Enable / disable the new position control (J required) |
 | `or_ctl j <J>` | 1e-6 .. 1e-3 | 0 | Inertia, A/(deg/s²) at the motor shaft |
-| `or_ctl bw <Hz> [zeta]` | 5..60 Hz, 0.5..2 | 31.5 Hz, 1.0 | Loop bandwidth and damping |
+| `or_ctl bw <Hz> [zeta]` | 5..60 Hz, 0.5..2 | 31.5 Hz, 1.0 | Loop bandwidth, damping ratio |
 | `or_ctl dob <Hz>` | 5..30 Hz | 15 Hz | Disturbance observer bandwidth |
-| `or_ctl amax <deg/s²>` | 1000..300000 | 25000 | Acceleration of the 0xA4 trajectory |
-| `or_ctl save` | | | Store all of the above in EEPROM (kept over reboot) |
-| `or_ctl clear` | | | Remove the stored values (off with defaults after the next reboot) |
+| `or_ctl amax <deg/s²>` | 1000..300000 | 25000 | 0xA4 trajectory acceleration |
+| `or_ctl save` | | | Save the above to EEPROM |
+| `or_ctl clear` | | | Delete saved values (defaults and off from the next boot) |
 
-Settings changed with `or_ctl` take effect at once but are lost on reboot until `or_ctl save`.
-`or_eeprom_default all` also clears them.
+Values changed with `or_ctl` apply immediately but are lost on reboot unless saved with `or_ctl save`.
+`or_eeprom_default all` also deletes them.
 
-Guidelines:
-- **bw**: higher is stiffer and faster, and also louder at standstill and closer to the mechanical
-  resonance of the actuator. The default suits the SPN actuators; raise it in small steps.
-- **zeta**: 1.0 gives no overshoot on the loop itself. Lower values answer faster with some overshoot.
-- **dob**: higher rejects load changes faster but makes the current noisier. Keep it well below bw.
-- **amax**: lower it for loads that swing (long arms, hanging loads); raise it for faster point-to-point moves.
+Setting guide:
+- bw: higher gives more stiffness and faster response, but more noise at standstill and closer to the
+  mechanical resonance. The default is set for SPN actuators. Increase in small steps.
+- zeta: 1.0 gives no overshoot from the loop itself. Lower values respond faster with overshoot.
+- dob: higher reacts faster to load changes but increases current noise. Keep it well below bw.
+- amax: lower for loads that swing easily (long arms, hanging loads), higher for fast point-to-point moves.
 
 ## 4. Behaviour by command
 
 | Command | With the new position control on |
 |---|---|
-| **0xA4** position move | Time-optimal trapezoid to the target (acceleration `amax`, speed limited by the DPS Vmax setting). Arrives in finite time without the slow final approach of the old servo mode. |
-| **0xA3** single position target | Small jumps go straight to the loop. A jump that would need more than about 3 A of position-error current goes through the same trapezoid instead of a current spike. |
-| **0xA3** stream (commands less than 50 ms apart) | The firmware measures the command period and replays the stream on its own clock, about 1.5 periods behind, so jitter in arrival times does not reach the motor. |
-| **0xA2** speed (DPS) | Uses the same inner loop. |
-| **MIT** (0xC0) and **current** commands | Not affected. |
+| 0xA4 position move | Trapezoidal trajectory (acceleration `amax`, max speed from the DPS Vmax setting). No long slow-down near the target as in the old servo mode. |
+| 0xA3 single position command | Small changes go directly to the loop. Large changes that would need more than about 3 A of position-error current follow the same trapezoidal trajectory as 0xA4. |
+| 0xA3 continuous commands (interval below 50 ms) | The command period is measured and the commands are replayed on an internal clock with about 1.5 periods of delay. Jitter in command arrival does not reach the motor. |
+| 0xA2 speed (DPS) | Uses the same inner loop. |
+| MIT (0xC0), current commands | Not affected. |
 
-Stream rates: over CAN, 0xA3 streams up to 1 kHz are received in full. Over EtherCAT, use a 2 ms
-(500 Hz) cycle for 0xA3 streams on SPN-MC V2 class boards.
+Command rates: over CAN, 0xA3 is received without loss up to 1 kHz. Over EtherCAT, use a 2 ms (500 Hz)
+cycle for continuous 0xA3 on SPN-MC V2 class boards.
 
-The command watchdog (`or_wd`) does not watch position and speed commands by default, so a single
-0xA3 / 0xA4 can be sent once and held.
+The communication watchdog (`or_wd`) does not monitor position and speed commands by default. A single
+0xA3 / 0xA4 can be sent and the position held.
 
-## 5. Also in this firmware, with or without `or_ctl`
+## 5. Changes independent of `or_ctl`
 
-- The position reference is interpolated inside the control loop, and the D term uses the measured
-  speed instead of the change of the error. Standstill current ripple is lower and a new target no
-  longer gives a kick.
-- Switching from MIT or current mode to a position command continues smoothly from the present position.
-- A position command that is redirected to the trajectory while the shaft is moving starts the
-  trajectory from the present speed instead of braking first.
+- The position target is interpolated inside the control loop, and the D term uses the measured speed
+  instead of the error derivative. Less current ripple at standstill and no current spike on a target change.
+- Switching from MIT or current mode to a position command starts from the present position.
+- When a position command is switched to the trajectory during rotation, the trajectory starts from the
+  present speed without stopping first.
 
-## 6. Checking it works
+## 6. Checking the setting
 
 ```
 > or_ctl
@@ -127,6 +122,6 @@ or_ctl ON: J 2.511e-05 A/(deg/s^2), bw 31.5 Hz zeta 1.00 -> kp 0.9836 A/deg kd 0
   DOB 15.0 Hz: d_hat 0.142 A, mean |d_hat| 0.150 A; servo trajectory amax 25000 deg/s^2
 ```
 
-- `ON` and the J you expect: the setting is active. After a reboot it should read the same if it was saved.
-- `d_hat` at standstill is the load the observer is carrying (friction, gravity). A value that grows
-  over time with no change in load points to a mechanical problem.
+- `ON` and the J you set mean the setting is applied. If saved, the same values appear after reboot.
+- `d_hat` at standstill is the load the observer is compensating (friction, gravity). If it grows over time
+  without a change in load, check the mechanics.
