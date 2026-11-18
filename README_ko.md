@@ -6,11 +6,13 @@ OpenRobot 모터 컨트롤러용 GUI 도구입니다. **CAN-Only 아키텍처** 
 
 **[CAN 프로토콜 문서](https://dongilc.github.io/openrobot-motor-tool/)** — OpenRobot MC CAN 통신 프로토콜 명세 (SID/EID)
 
+> 양산 굽기와 검사: **[OpenRobot ST-Link Tool](https://github.com/dongilc/openrobot-stlink-tool)**
+
 ## 다운로드
 
 최신 버전은 **[Releases](https://github.com/dongilc/openrobot-motor-tool/releases/latest)** 에서 다운로드:
 
-- **Windows**: `OpenRobot_Motor_Tool_v3.9.4.exe`
+- **Windows**: `OpenRobot_Motor_Tool_v3.9.5.exe`
 
 설치 불필요 — 단일 실행 파일.
 
@@ -57,7 +59,7 @@ OpenRobot 모터 컨트롤러용 GUI 도구입니다. **CAN-Only 아키텍처** 
 
 ## 빠른 시작
 
-1. [Releases](https://github.com/dongilc/openrobot-motor-tool/releases/latest) 에서 `OpenRobot_Motor_Tool_v3.9.4.exe` 다운로드
+1. [Releases](https://github.com/dongilc/openrobot-motor-tool/releases/latest) 에서 `OpenRobot_Motor_Tool_v3.9.5.exe` 다운로드
 2. 어댑터별 드라이버 준비:
    - **PCAN-USB**: PEAK-System 에서 PCAN 드라이버 설치
    - **CANable 2.0**: slcan 펌웨어 적재 (Win10/11 별도 드라이버 불필요)

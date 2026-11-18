@@ -6,11 +6,13 @@ GUI tool for OpenRobot motor controllers. **CAN-Only architecture** — communic
 
 **[CAN Protocol Documentation](https://dongilc.github.io/openrobot-motor-tool/)** — OpenRobot MC CAN communication protocol specification (SID/EID)
 
+> Production flashing and inspection: **[OpenRobot ST-Link Tool](https://github.com/dongilc/openrobot-stlink-tool)**
+
 ## Download
 
 Download the latest version from **[Releases](https://github.com/dongilc/openrobot-motor-tool/releases/latest)**:
 
-- **Windows**: `OpenRobot_Motor_Tool_v3.9.4.exe`
+- **Windows**: `OpenRobot_Motor_Tool_v3.9.5.exe`
 
 No installation required — single executable.
 
@@ -57,7 +59,7 @@ No installation required — single executable.
 
 ## Quick Start
 
-1. Download `OpenRobot_Motor_Tool_v3.9.4.exe` from [Releases](https://github.com/dongilc/openrobot-motor-tool/releases/latest)
+1. Download `OpenRobot_Motor_Tool_v3.9.5.exe` from [Releases](https://github.com/dongilc/openrobot-motor-tool/releases/latest)
 2. Install the driver for your adapter:
    - **PCAN-USB**: install PCAN driver from PEAK-System
    - **CANable 2.0**: flash slcan firmware (no driver install needed on Win10/11)
